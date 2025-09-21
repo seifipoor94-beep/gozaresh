@@ -31,15 +31,23 @@ for sheet_name in xls.sheet_names:
     
     if 'نام دانش آموز' in df.columns:
         df.rename(columns={'نام دانش آموز':'نام دانش‌آموز'}, inplace=True)
+    else:
+        st.warning(f"ستون نام دانش‌آموز در شیت {sheet_name} یافت نشد و این شیت نادیده گرفته شد.")
+        continue
     
     score_columns = [col for col in df.columns if col != 'نام دانش‌آموز']
     df_long = df.melt(id_vars=['نام دانش‌آموز'], value_vars=score_columns,
                       var_name='هفته', value_name='نمره')
-    df_long['درس'] = sheet_name  # نام شیت = نام درس
+    
+    # تبدیل نمره به عددی
+    df_long['نمره'] = pd.to_numeric(df_long['نمره'], errors='coerce')
+    df_long = df_long.dropna(subset=['نمره'])
+    
+    df_long['درس'] = sheet_name
     all_data.append(df_long)
 
+# ترکیب همه شیت‌ها
 scores_long = pd.concat(all_data, ignore_index=True)
-scores_long = scores_long.dropna(subset=['نمره'])
 
 # -------------------------------
 # فرم ورود
@@ -99,6 +107,23 @@ st.subheader("🏆 رتبه‌بندی دانش‌آموزها")
 lesson_rank = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().sort_values(ascending=False).reset_index()
 lesson_rank.index = range(1, len(lesson_rank)+1)
 st.dataframe(lesson_rank)
+
+# -------------------------------
+# نمودار دایره‌ای وضعیت کل کلاس
+# -------------------------------
+st.subheader("🍰 نمودار دایره‌ای وضعیت کل کلاس")
+def categorize_grade(score):
+    if score >= 17:
+        return "عالی"
+    elif score >= 12:
+        return "متوسط"
+    else:
+        return "ضعیف"
+
+lesson_data['وضعیت'] = lesson_data['نمره'].apply(categorize_grade)
+fig_pie = px.pie(lesson_data, names='وضعیت', title=f"وضعیت کلاس در درس {selected_lesson}",
+                 color='وضعیت', color_discrete_map={'عالی':'green', 'متوسط':'orange', 'ضعیف':'red'})
+st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------
 # نمودار تعاملی فردی
