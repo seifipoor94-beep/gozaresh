@@ -1,17 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import io
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
 # ------------------ تنظیمات صفحه ------------------
 st.set_page_config(page_title="📊 سامانه کارنامه", layout="wide")
-
-# ------------------ ثبت فونت فارسی ------------------
-pdfmetrics.registerFont(TTFont("Vazir", "fonts/Vazir.ttf"))
 
 # ------------------ ورود کاربر ------------------
 PASSWORD = "1234"
@@ -88,49 +80,6 @@ if uploaded_file:
     # ------------------ جدول کارنامه ------------------
     st.subheader("📑 کارنامه کلی")
     st.dataframe(overall_avg.style.background_gradient(subset=["نمره"], cmap="Blues"), use_container_width=True)
-
-    # ------------------ تابع تولید PDF ------------------
-    def generate_student_pdf(student_name, student_data, status_map):
-        buffer = io.BytesIO()
-        c = canvas.Canvas(buffer, pagesize=A4)
-        width, height = A4
-
-        # عنوان کارنامه
-        c.setFont("Vazir", 18)
-        c.drawCentredString(width / 2, height - 50, f"کارنامه‌ی {student_name}")
-
-        c.setFont("Vazir", 12)
-        y = height - 100
-
-        # نمایش نمره‌ها و وضعیت کیفی
-        for _, row in student_data.iterrows():
-            lesson = row["درس"]
-            score = row["نمره"]
-            status = status_map.get(score, "نامشخص")
-            text_line = f"درس: {lesson}   |   نمره: {score}   |   وضعیت: {status}"
-            c.drawString(50, y, text_line)
-            y -= 25
-
-            # اگر به پایین صفحه رسیدیم → صفحه جدید
-            if y < 50:
-                c.showPage()
-                c.setFont("Vazir", 12)
-                y = height - 50
-
-        c.showPage()
-        c.save()
-        buffer.seek(0)
-        return buffer
-
-    # ------------------ دانلود PDF ------------------
-    status_map = {1: "نیاز به تلاش بیشتر", 2: "قابل قبول", 3: "خوب", 4: "خیلی خوب"}
-
-    st.subheader("⬇️ دانلود کارنامه PDF")
-    for student in overall_avg["نام دانش آموز"]:
-        student_data = scores_long[scores_long["نام دانش آموز"] == student]
-        pdf_buffer = generate_student_pdf(student, student_data, status_map)
-        st.download_button(f"دانلود PDF {student}", data=pdf_buffer,
-                           file_name=f"{student}_report.pdf", mime="application/pdf")
 
 else:
     st.info("برای شروع، فایل اکسل نمرات را بارگذاری کنید.")
