@@ -4,15 +4,15 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from io import BytesIO
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 import plotly.express as px
 import os
 
 # -------------------------------
-# فونت فارسی برای matplotlib
+# فونت فارسی matplotlib
 # -------------------------------
 rcParams['font.family'] = 'Tahoma'
 rcParams['axes.unicode_minus'] = False
@@ -138,7 +138,25 @@ if not student_data.empty:
     st.plotly_chart(fig_line, use_container_width=True)
 
 # -------------------------------
-# کارنامه دانش‌آموز در داشبورد
+# رتبه‌بندی درس به درس
+# -------------------------------
+st.subheader("🏆 رتبه‌بندی درس به درس")
+lesson_rank = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
+lesson_rank['رتبه'] = lesson_rank['نمره'].rank(ascending=False, method='min').astype(int)
+lesson_rank = lesson_rank.sort_values('رتبه')
+st.dataframe(lesson_rank[['رتبه','نام دانش‌آموز','نمره']])
+
+# -------------------------------
+# رتبه‌بندی کلی بر اساس میانگین کل دروس
+# -------------------------------
+st.subheader("🏅 رتبه‌بندی کلی کلاس")
+overall_avg = scores_long.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
+overall_avg['رتبه'] = overall_avg['نمره'].rank(ascending=False, method='min').astype(int)
+overall_avg = overall_avg.sort_values('رتبه')
+st.dataframe(overall_avg[['رتبه','نام دانش‌آموز','نمره']])
+
+# -------------------------------
+# کارنامه دانش‌آموز
 # -------------------------------
 st.subheader(f"📝 کارنامه {selected_student}")
 student_overall = []
@@ -186,14 +204,6 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
         c.drawString(400,y,status)
         y -= 20
 
-    # میانگین کل
-    overall_avg = scores_long[scores_long['نام دانش‌آموز']==student_name]['نمره'].mean()
-    overall_status = status_map.get(int(round(overall_avg)),"نامشخص")
-    y -= 10
-    c.setFont(font_name,14)
-    c.drawString(50,y,f"میانگین کل: {round(overall_avg,2)} → {overall_status}")
-    y -= 30
-
     # نمودار خطی جدا
     df_student = scores_long[scores_long['نام دانش‌آموز']==student_name]
     plt.figure(figsize=(6,3))
@@ -212,7 +222,7 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     c.drawImage(ImageReader(line_buf),50,y-150,width=500,height=150)
     y -= 170
 
-    # نمودار دایره‌ای جدا
+    # نمودار دایره‌ای کلاس جدا
     class_status = df_student.groupby('درس')['نمره'].mean().round().astype(int).map(status_map)
     status_counts = class_status.value_counts()
     plt.figure(figsize=(5,3))
@@ -229,10 +239,10 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     buffer.seek(0)
     return buffer
 
-pdf_buf = generate_pdf(user_name, scores_long, status_map, status_colors)
+pdf_buf = generate_pdf(selected_student, scores_long, status_map, status_colors)
 st.download_button(
     label="📥 دانلود کارنامه کامل با نمودارها",
     data=pdf_buf,
-    file_name=f"کارنامه_{user_name}.pdf",
+    file_name=f"کارنامه_{selected_student}.pdf",
     mime="application/pdf"
 )
