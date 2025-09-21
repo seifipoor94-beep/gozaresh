@@ -1,0 +1,9 @@
+streamlit
+pandas
+openpyxl
+streamlit-authenticator
+streamlit-option-menu
+matplotlib
+seaborn
+plotly
+numpy
