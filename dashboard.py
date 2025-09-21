@@ -6,15 +6,14 @@ import plotly.express as px
 st.set_page_config(page_title="📊 مدیریت عملکرد کلاس", layout="wide")
 
 # ------------------ داده کاربران ------------------
-# در فایل users.xlsx ذخیره شده
-# ستون‌ها: نام کاربر | نقش | رمز ورود
+# ستون‌ها: نقش | رمز ورود
 users_df = pd.read_excel("data/users.xlsx")
 users_df.columns = users_df.columns.str.strip()
 
+# ------------------ مدیریت جلسه ------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user_role = None
-    st.session_state.user_name = None
 
 # ------------------ ورود با نقش ------------------
 if not st.session_state.authenticated:
@@ -22,17 +21,17 @@ if not st.session_state.authenticated:
         """
         <style>
         .login-card {
-            max-width: 450px;
+            max-width: 400px;
             margin: auto;
             margin-top: 150px;
             padding: 30px;
             border-radius: 15px;
-            background: linear-gradient(135deg, #dfe9f3 0%, #ffffff 100%);
-            box-shadow: 0px 8px 20px rgba(0,0,0,0.15);
+            background: linear-gradient(135deg, #f0f4ff 0%, #dfe9f3 100%);
+            box-shadow: 0px 8px 20px rgba(0,0,0,0.2);
             text-align: center;
         }
         .login-title {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: bold;
             margin-bottom: 20px;
             color: #2c3e50;
@@ -40,11 +39,12 @@ if not st.session_state.authenticated:
         .login-button {
             background-color: #4CAF50;
             color: white;
-            padding: 10px 24px;
+            padding: 12px 28px;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
             font-size: 16px;
+            margin-top: 10px;
         }
         </style>
         <div class="login-card">
@@ -54,21 +54,18 @@ if not st.session_state.authenticated:
     )
 
     role = st.selectbox("نقش خود را انتخاب کنید:", ["والد", "آموزگار", "مدیر"])
-    user_name_input = st.text_input("نام کاربری")
     password_input = st.text_input("رمز ورود", type="password")
 
     if st.button("ورود"):
-        valid_user = users_df[(users_df["نقش"] == role) & 
-                              (users_df["نام کاربر"] == user_name_input) & 
+        valid_user = users_df[(users_df["نقش"] == role) &
                               (users_df["رمز ورود"] == password_input)]
         if not valid_user.empty:
             st.session_state.authenticated = True
             st.session_state.user_role = role
-            st.session_state.user_name = user_name_input
-            st.success(f"✅ خوش آمدید {user_name_input} عزیز! شما به عنوان {role} وارد شدید.")
+            st.success(f"✅ خوش آمدید! شما به عنوان {role} وارد شدید.")
             st.rerun()
         else:
-            st.error("❌ نام کاربری، نقش یا رمز اشتباه است")
+            st.error("❌ نقش یا رمز اشتباه است")
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
