@@ -99,12 +99,14 @@ else:
 lesson_data = scores_long[scores_long['درس'] == selected_lesson]
 student_data = lesson_data[lesson_data['نام دانش‌آموز'] == selected_student]
 
+# -------------------------------
 # وضعیت کیفی
+# -------------------------------
 status_map = {1:"نیاز به تلاش بیشتر", 2:"قابل قبول", 3:"خوب", 4:"خیلی خوب"}
 status_colors = {"نیاز به تلاش بیشتر": "red", "قابل قبول":"orange","خوب":"blue","خیلی خوب":"green"}
 
 # -------------------------------
-# نمودار دایره‌ای کلاس
+# نمودار دایره‌ای کلاس (جدای خطی)
 # -------------------------------
 st.subheader("🍩 نمودار وضعیت کیفی کلاس")
 student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
@@ -119,7 +121,7 @@ fig_pie = px.pie(
 st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------
-# نمودار خطی دانش‌آموز
+# نمودار خطی دانش‌آموز (جدای دایره‌ای)
 # -------------------------------
 st.subheader(f"📈 روند نمرات {selected_student}")
 if not student_data.empty:
@@ -140,8 +142,7 @@ st.subheader(f"📝 کارنامه {selected_student}")
 student_overall = []
 for lesson in scores_long['درس'].unique():
     df_lesson = scores_long[(scores_long['درس']==lesson) & (scores_long['نام دانش‌آموز']==selected_student)]
-    if df_lesson.empty:
-        continue
+    if df_lesson.empty: continue
     avg_score = df_lesson['نمره'].mean()
     status = status_map.get(int(round(avg_score)),"نامشخص")
     student_overall.append({"درس":lesson,"میانگین":round(avg_score,2),"وضعیت":status})
@@ -190,9 +191,9 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     for lesson in df_student['درس'].unique():
         df_l = df_student[df_student['درس']==lesson]
         plt.plot(df_l['هفته'], df_l['نمره'], marker='o', label=lesson)
-    plt.title("روند نمرات دانش‌آموز")
-    plt.xlabel("هفته")
-    plt.ylabel("نمره")
+    plt.title("روند نمرات دانش‌آموز", fontsize=12)
+    plt.xlabel("هفته", fontsize=10)
+    plt.ylabel("نمره", fontsize=10)
     plt.legend()
     line_buf = BytesIO()
     plt.tight_layout()
@@ -208,7 +209,7 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     plt.figure(figsize=(5,3))
     plt.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%',
             colors=['red','orange','blue','green'])
-    plt.title("وضعیت کیفی کل کلاس")
+    plt.title("وضعیت کیفی کل کلاس", fontsize=12)
     pie_buf = BytesIO()
     plt.savefig(pie_buf, format='png')
     plt.close()
