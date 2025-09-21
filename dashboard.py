@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -30,20 +29,33 @@ for sheet_name in xls.sheet_names:
     df = pd.read_excel(xls, sheet_name=sheet_name)
     df.columns = df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
     
+    # تغییر نام ستون نام دانش‌آموز
     if 'نام دانش آموز' in df.columns:
         df.rename(columns={'نام دانش آموز':'نام دانش‌آموز'}, inplace=True)
-    else:
+    elif 'نام دانش‌آموز' not in df.columns:
         st.warning(f"ستون نام دانش‌آموز در شیت {sheet_name} یافت نشد و این شیت نادیده گرفته شد.")
         continue
-    
+
+    # استانداردسازی اسم هفته‌ها
+    rename_map = {}
+    for col in df.columns:
+        if "هفته" in col:
+            if "اول" in col: rename_map[col] = "هفته اول"
+            elif "دوم" in col: rename_map[col] = "هفته دوم"
+            elif "سوم" in col: rename_map[col] = "هفته سوم"
+            elif "چهارم" in col: rename_map[col] = "هفته چهارم"
+    df.rename(columns=rename_map, inplace=True)
+
+    # تبدیل داده‌ها به حالت long
     score_columns = [col for col in df.columns if col != 'نام دانش‌آموز']
     df_long = df.melt(id_vars=['نام دانش‌آموز'], value_vars=score_columns,
                       var_name='هفته', value_name='نمره')
-    
-    # تبدیل نمره به عددی (انتظار داریم مقادیر 1 تا 4 باشه)
+
+    # تبدیل نمره به عدد
     df_long['نمره'] = pd.to_numeric(df_long['نمره'], errors='coerce')
     df_long = df_long.dropna(subset=['نمره'])
-    
+    df_long['نمره'] = df_long['نمره'].astype(int)
+
     df_long['درس'] = sheet_name
     all_data.append(df_long)
 
@@ -96,7 +108,6 @@ col3.metric("کمترین نمره", lesson_data['نمره'].min())
 # -------------------------------
 st.subheader("🍩 نمودار وضعیت کیفی کلاس")
 
-# نگاشت سطوح کیفی
 status_map = {
     1: "نیاز به تلاش بیشتر",
     2: "قابل قبول",
@@ -104,7 +115,6 @@ status_map = {
     4: "خیلی خوب"
 }
 
-# محاسبه میانگین هر دانش‌آموز در این درس
 student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
 student_avg['وضعیت'] = student_avg['نمره'].round().map(status_map)
 
@@ -120,14 +130,21 @@ fig_pie = px.pie(
         "خیلی خوب": "green"
     }
 )
-
 st.plotly_chart(fig_pie, use_container_width=True)
+
+# -------------------------------
+# رتبه‌بندی کلاس (فقط برای معلم و مدیر)
+# -------------------------------
+if entered_role in ["آموزگار", "مدیر"]:
+    st.subheader("🏆 رتبه‌بندی دانش‌آموزان در این درس")
+    ranking = student_avg.sort_values(by='نمره', ascending=False).reset_index(drop=True)
+    ranking.index = ranking.index + 1
+    st.dataframe(ranking[['نام دانش‌آموز', 'نمره', 'وضعیت']])
 
 # -------------------------------
 # نمودار فردی (خطی)
 # -------------------------------
 st.subheader(f"📊 روند نمرات {selected_student}")
-
 if not student_data.empty:
     fig_line = px.line(
         student_data,
@@ -140,7 +157,37 @@ if not student_data.empty:
     st.plotly_chart(fig_line, use_container_width=True)
 
 # -------------------------------
-# گزارش متنی فردی (با وضعیت کیفی)
+# مقایسه دانش‌آموز با میانگین کلاس
+# -------------------------------
+st.subheader("⚖️ مقایسه با میانگین کلاس")
+
+student_avg_score = student_data['نمره'].mean()
+class_avg_score = lesson_data['نمره'].mean()
+diff = round(student_avg_score - class_avg_score, 2)
+
+comparison_df = pd.DataFrame({
+    "مقایسه": ["میانگین کلاس", f"{selected_student}"],
+    "نمره": [class_avg_score, student_avg_score]
+})
+
+fig_compare = px.bar(
+    comparison_df,
+    x="مقایسه",
+    y="نمره",
+    color="مقایسه",
+    title=f"مقایسه میانگین {selected_student} با میانگین کلاس"
+)
+st.plotly_chart(fig_compare, use_container_width=True)
+
+if diff > 0:
+    st.success(f"✅ {selected_student} به طور میانگین {abs(diff)} نمره بالاتر از میانگین کلاس است.")
+elif diff < 0:
+    st.warning(f"⚠️ {selected_student} به طور میانگین {abs(diff)} نمره پایین‌تر از میانگین کلاس است.")
+else:
+    st.info(f"ℹ️ {selected_student} دقیقا برابر با میانگین کلاس است.")
+
+# -------------------------------
+# گزارش متنی فردی
 # -------------------------------
 st.subheader("📝 گزارش متنی نمرات")
 if not student_data.empty:
