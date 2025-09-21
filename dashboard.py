@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 import os
 
-st.set_page_config(page_title="📊 داشبورد گزارش نمرات", layout="wide")
-st.title("📊 داشبورد گزارش نمرات دانش‌آموز")
+st.set_page_config(page_title="📊 داشبورد پیشرفته نمرات", layout="wide")
+st.title("📊 داشبورد پیشرفته نمرات دانش‌آموز")
 
 # -------------------------------
 # بررسی وجود فایل‌ها
@@ -23,24 +23,26 @@ users_df.columns = users_df.columns.str.strip().str.replace('\u200c', ' ').str.r
 # بارگذاری نمرات
 # -------------------------------
 scores_df = pd.read_excel("data/nomarat_darsi.xlsx")
-
-# پاکسازی ستون‌ها برای جلوگیری از مشکلات فاصله و کاراکترهای اضافی
 scores_df.columns = scores_df.columns.str.strip().str.replace('\u200c', ' ').str.replace('\xa0', ' ')
 
-# اصلاح نام ستون‌ها اگر نیاز باشد
-if 'نام دانش آموز' in scores_df.columns:
-    scores_df.rename(columns={'نام دانش آموز': 'نام دانش‌آموز'}, inplace=True)
-if 'درس ' in scores_df.columns:
-    scores_df.rename(columns={'درس ': 'درس'}, inplace=True)
-if 'نمره ' in scores_df.columns:
-    scores_df.rename(columns={'نمره ': 'نمره'}, inplace=True)
+# شناسایی خودکار ستون‌ها
+column_map = {}
+for col in scores_df.columns:
+    if 'نام' in col and 'دانش' in col:
+        column_map['نام دانش‌آموز'] = col
+    elif 'درس' in col:
+        column_map['درس'] = col
+    elif 'نمره' in col:
+        column_map['نمره'] = col
 
-# بررسی ستون‌های مورد نیاز
+# اطمینان از پیدا شدن همه ستون‌ها
 required_columns = ['نام دانش‌آموز', 'درس', 'نمره']
 for col in required_columns:
-    if col not in scores_df.columns:
+    if col not in column_map:
         st.error(f"❌ ستون مورد نیاز '{col}' در فایل نمرات یافت نشد!")
         st.stop()
+
+scores_df.rename(columns={v:k for k,v in column_map.items()}, inplace=True)
 
 # -------------------------------
 # فرم ورود
@@ -49,7 +51,6 @@ st.sidebar.title("🔐 ورود به داشبورد")
 entered_role = st.sidebar.selectbox("نقش خود را انتخاب کنید:", ["والد", "آموزگار", "مدیر"])
 entered_code = st.sidebar.text_input("رمز ورود:", type="password")
 
-# بررسی اعتبار
 valid_user = users_df[(users_df["نقش"] == entered_role) & (users_df["رمز ورود"] == entered_code)]
 
 if valid_user.empty:
@@ -60,7 +61,7 @@ user_name = valid_user.iloc[0]["نام کاربر"]
 st.success(f"✅ خوش آمدید {user_name} عزیز! شما به‌عنوان {entered_role} وارد شده‌اید.")
 
 # -------------------------------
-# انتخاب درس
+# انتخاب درس و دانش‌آموز
 # -------------------------------
 if entered_role == "والد":
     student_scores = scores_df[scores_df['نام دانش‌آموز'] == user_name]
@@ -73,19 +74,25 @@ else:
     students = scores_df[scores_df['درس'] == selected_lesson]['نام دانش‌آموز'].unique()
     selected_student = st.selectbox("دانش‌آموز را انتخاب کنید:", students)
 
-# -------------------------------
-# نمودار کلی کلاس
-# -------------------------------
-st.subheader("📈 نمودارهای کلی کلاس")
 lesson_data = scores_df[scores_df['درس'] == selected_lesson]
+student_data = lesson_data[lesson_data['نام دانش‌آموز'] == selected_student]
 
-fig, ax = plt.subplots(figsize=(10,5))
-ax.bar(lesson_data['نام دانش‌آموز'], lesson_data['نمره'], color='skyblue')
-ax.set_ylabel("نمره")
-ax.set_xlabel("دانش‌آموز")
-ax.set_title(f"نمرات درس {selected_lesson}")
-plt.xticks(rotation=45)
-st.pyplot(fig)
+# -------------------------------
+# کارت‌های خلاصه کلاس
+# -------------------------------
+col1, col2, col3 = st.columns(3)
+col1.metric("میانگین کلاس", round(lesson_data['نمره'].mean(), 2))
+col2.metric("بیشترین نمره", lesson_data['نمره'].max())
+col3.metric("کمترین نمره", lesson_data['نمره'].min())
+
+# -------------------------------
+# نمودار تعاملی کلاس
+# -------------------------------
+st.subheader("📈 نمودار تعاملی کلاس")
+fig_class = px.bar(lesson_data, x='نام دانش‌آموز', y='نمره',
+                   color='نمره', color_continuous_scale='Blues',
+                   title=f"نمرات درس {selected_lesson}")
+st.plotly_chart(fig_class, use_container_width=True)
 
 # -------------------------------
 # رتبه‌بندی کلاس
@@ -96,18 +103,14 @@ lesson_rank.index = range(1, len(lesson_rank)+1)
 st.dataframe(lesson_rank[['نام دانش‌آموز', 'نمره']])
 
 # -------------------------------
-# نمودار فردی
+# نمودار تعاملی فردی
 # -------------------------------
 st.subheader(f"📊 نمودار نمرات {selected_student}")
-student_data = lesson_data[lesson_data['نام دانش‌آموز'] == selected_student]
-
-fig2, ax2 = plt.subplots(figsize=(6,4))
 if not student_data.empty:
-    ax2.bar(student_data['درس'], student_data['نمره'], color='orange')
-    ax2.set_ylabel("نمره")
-    ax2.set_xlabel("درس")
-    ax2.set_title(f"نمرات {selected_student}")
-    st.pyplot(fig2)
+    fig_student = px.bar(student_data, x='درس', y='نمره',
+                         color='نمره', color_continuous_scale='Oranges',
+                         title=f"نمرات {selected_student}")
+    st.plotly_chart(fig_student, use_container_width=True)
 
 # -------------------------------
 # گزارش متنی فردی
