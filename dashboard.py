@@ -20,34 +20,22 @@ users_df = pd.read_excel("data/users.xlsx")
 users_df.columns = users_df.columns.str.strip().str.replace('\u200c', ' ').str.replace('\xa0', ' ')
 
 # -------------------------------
-# بارگذاری نمرات
+# بارگذاری نمرات (wide format)
 # -------------------------------
 scores_df = pd.read_excel("data/nomarat_darsi.xlsx")
-scores_df.columns = scores_df.columns.str.strip().str.replace('\u200c', ' ').str.replace('\xa0', ' ')
+scores_df.columns = scores_df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
 
-# -------------------------------
-# شناسایی خودکار ستون‌ها
-# -------------------------------
-column_map = {}
+# اصلاح نام ستون نام دانش‌آموز
+if 'نام دانش آموز' in scores_df.columns:
+    scores_df.rename(columns={'نام دانش آموز':'نام دانش‌آموز'}, inplace=True)
 
-for col in scores_df.columns:
-    col_clean = col.strip().replace('\u200c',' ').replace('\xa0',' ')
-    if 'نام' in col_clean and 'دانش' in col_clean:
-        column_map['نام دانش‌آموز'] = col
-    elif 'درس' in col_clean:
-        column_map['درس'] = col
-    elif 'نمره' in col_clean:
-        column_map['نمره'] = col
+# ستون‌هایی که نمره‌ها هستند
+score_columns = [col for col in scores_df.columns if col != 'نام دانش‌آموز']
 
-# بررسی پیدا شدن همه ستون‌ها
-required_columns = ['نام دانش‌آموز', 'درس', 'نمره']
-missing_columns = [col for col in required_columns if col not in column_map]
-if missing_columns:
-    st.error(f"❌ ستون(های) مورد نیاز {missing_columns} در فایل نمرات یافت نشد! ستون‌های موجود: {scores_df.columns.tolist()}")
-    st.stop()
-
-# تغییر نام ستون‌ها به نام استاندارد
-scores_df.rename(columns={v:k for k,v in column_map.items()}, inplace=True)
+# تبدیل wide به long
+scores_long = scores_df.melt(id_vars=['نام دانش‌آموز'], value_vars=score_columns,
+                              var_name='درس', value_name='نمره')
+scores_long = scores_long.dropna(subset=['نمره'])
 
 # -------------------------------
 # فرم ورود
@@ -69,17 +57,17 @@ st.success(f"✅ خوش آمدید {user_name} عزیز! شما به‌عنوا�
 # انتخاب درس و دانش‌آموز
 # -------------------------------
 if entered_role == "والد":
-    student_scores = scores_df[scores_df['نام دانش‌آموز'] == user_name]
+    student_scores = scores_long[scores_long['نام دانش‌آموز'] == user_name]
     lessons = student_scores['درس'].unique()
     selected_lesson = st.selectbox("درس مورد نظر را انتخاب کنید:", lessons)
     selected_student = user_name
 else:
-    lessons = scores_df['درس'].unique()
+    lessons = scores_long['درس'].unique()
     selected_lesson = st.selectbox("درس مورد نظر را انتخاب کنید:", lessons)
-    students = scores_df[scores_df['درس'] == selected_lesson]['نام دانش‌آموز'].unique()
+    students = scores_long[scores_long['درس'] == selected_lesson]['نام دانش‌آموز'].unique()
     selected_student = st.selectbox("دانش‌آموز را انتخاب کنید:", students)
 
-lesson_data = scores_df[scores_df['درس'] == selected_lesson]
+lesson_data = scores_long[scores_long['درس'] == selected_lesson]
 student_data = lesson_data[lesson_data['نام دانش‌آموز'] == selected_student]
 
 # -------------------------------
