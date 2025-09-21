@@ -1,119 +1,136 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import plotly.express as px
-from io import BytesIO
+import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
-st.set_page_config(page_title="📊 داشبورد گزارش نمرات", layout="wide")
-st.title("📊 داشبورد پیشرفته نمرات دانش‌آموزان")
+# ------------------ تنظیمات صفحه ------------------
+st.set_page_config(page_title="📊 سامانه کارنامه", layout="wide")
 
-# -------------------------------
-# بارگذاری فایل‌ها
-# -------------------------------
-users_df = pd.read_excel("data/users.xlsx")
-users_df.columns = users_df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
+# ------------------ ثبت فونت فارسی ------------------
+pdfmetrics.registerFont(TTFont("Vazir", "fonts/Vazir.ttf"))
 
-scores_file = "data/nomarat_darsi.xlsx"
-scores_xl = pd.ExcelFile(scores_file)
-lessons = scores_xl.sheet_names  # هر شیت = یک درس
+# ------------------ ورود کاربر ------------------
+PASSWORD = "1234"
 
-# -------------------------------
-# فرم ورود (صفحه اصلی)
-# -------------------------------
-st.subheader("🔐 ورود به داشبورد")
-entered_role = st.selectbox("نقش خود را انتخاب کنید:", ["والد", "آموزگار", "مدیر"])
-entered_code = st.text_input("رمز ورود:", type="password")
-login_button = st.button("ورود")
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
-if login_button:
-    valid_user = users_df[(users_df["نقش"] == entered_role) & (users_df["رمز ورود"] == entered_code)]
-    if valid_user.empty:
-        st.warning("❌ رمز یا نقش اشتباه است.")
-        st.stop()
-    user_name = valid_user.iloc[0]["نام کاربر"]
-    st.success(f"✅ خوش آمدید {user_name} عزیز! شما به‌عنوان {entered_role} وارد شده‌اید.")
+if not st.session_state.authenticated:
+    st.markdown(
+        """
+        <style>
+        .login-card {
+            max-width: 400px;
+            margin: auto;
+            margin-top: 150px;
+            padding: 30px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #dfe9f3 0%, #ffffff 100%);
+            box-shadow: 0px 8px 20px rgba(0,0,0,0.15);
+            text-align: center;
+        }
+        .login-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .login-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        </style>
+        <div class="login-card">
+            <div class="login-title">🔑 ورود به سامانه کارنامه</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # -------------------------------
-    # انتخاب درس
-    # -------------------------------
-    selected_lesson = st.selectbox("درس مورد نظر را انتخاب کنید:", lessons)
-    lesson_data = pd.read_excel(scores_file, sheet_name=selected_lesson)
-    lesson_data.columns = lesson_data.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
+    password_input = st.text_input("رمز ورود", type="password")
+    if st.button("ورود", key="login_button"):
+        if password_input == PASSWORD:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("❌ رمز اشتباه است")
 
-    # -------------------------------
-    # انتخاب دانش‌آموز
-    # -------------------------------
-    if entered_role == "والد":
-        selected_student = user_name
-    else:
-        students = lesson_data['نام دانش‌آموز'].unique()
-        selected_student = st.selectbox("دانش‌آموز را انتخاب کنید:", students)
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
 
-    student_data = lesson_data[lesson_data['نام دانش‌آموز']==selected_student]
+# ------------------ بارگذاری فایل اکسل ------------------
+uploaded_file = st.file_uploader("📂 فایل اکسل نمرات را بارگذاری کنید", type=["xlsx"])
 
-    # -------------------------------
-    # نمودار دایره‌ای وضعیت کلاس
-    # -------------------------------
-    status_map = {1:'نیاز به تلاش بیشتر', 2:'قابل قبول', 3:'خوب', 4:'خیلی خوب'}
-    status_colors = {'نیاز به تلاش بیشتر':'#FF6347', 'قابل قبول':'#FFD700',
-                     'خوب':'#87CEFA', 'خیلی خوب':'#32CD32'}
-    lesson_avg_status = lesson_data.drop('نام دانش‌آموز', axis=1).mean(axis=1).map(lambda x: int(round(x)))
-    lesson_status_counts = lesson_avg_status.map(status_map).value_counts()
+if uploaded_file:
+    scores_long = pd.read_excel(uploaded_file)
 
-    fig1, ax1 = plt.subplots()
-    ax1.pie([lesson_status_counts.get(s,0) for s in status_map.values()],
-            labels=status_map.values(),
-            colors=[status_colors[s] for s in status_map.values()],
-            autopct='%1.1f%%', startangle=90)
-    ax1.set_title(f"وضعیت کل کلاس در درس {selected_lesson}")
-    st.pyplot(fig1)
+    # تبدیل ستون نمره به عدد و حذف غیرعددی‌ها
+    scores_long["نمره"] = pd.to_numeric(scores_long["نمره"], errors="coerce")
+    scores_long = scores_long.dropna(subset=["نمره"])
 
-    # -------------------------------
-    # نمودار خطی هفته‌ها برای دانش‌آموز
-    # -------------------------------
-    weeks = [c for c in lesson_data.columns if c!='نام دانش‌آموز']
-    student_scores = student_data[weeks].iloc[0]
-    fig2, ax2 = plt.subplots()
-    ax2.plot(weeks, student_scores, marker='o', linestyle='-', color='orange')
-    ax2.set_title(f"نمرات {selected_student} در درس {selected_lesson}")
-    ax2.set_ylabel("نمره")
-    ax2.set_xlabel("هفته")
-    st.pyplot(fig2)
+    # میانگین هر دانش‌آموز
+    overall_avg = scores_long.groupby("نام دانش آموز")["نمره"].mean().reset_index()
 
-    # -------------------------------
-    # کارنامه مدرسه‌ای برای دانش‌آموز
-    # -------------------------------
-    st.subheader(f"📝 کارنامه {selected_student}")
-    report_df = pd.DataFrame(columns=['درس','میانگین','وضعیت'])
-    for lesson in lessons:
-        df = pd.read_excel(scores_file, sheet_name=lesson)
-        df.columns = df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
-        student_row = df[df['نام دانش‌آموز']==selected_student]
-        if not student_row.empty:
-            avg_score = student_row.drop('نام دانش‌آموز', axis=1).mean(axis=1).values[0]
-            status = status_map[int(round(avg_score))]
-            report_df = report_df.append({'درس':lesson,'میانگین':round(avg_score,2),'وضعیت':status}, ignore_index=True)
-    st.dataframe(report_df.style.apply(lambda x: [f"background-color: {status_colors[v]}" for v in x['وضعیت']], axis=1))
+    # ------------------ نمودار میانگین ------------------
+    st.subheader("📊 نمودار میانگین نمرات دانش‌آموزان")
+    fig = px.bar(overall_avg, x="نام دانش آموز", y="نمره", color="نمره",
+                 color_continuous_scale="Blues", title="میانگین نمرات دانش‌آموزان")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------------------
-    # دانلود PDF کارنامه
-    # -------------------------------
-    def generate_pdf(df, student_name):
-        buffer = BytesIO()
+    # ------------------ جدول کارنامه ------------------
+    st.subheader("📑 کارنامه کلی")
+    st.dataframe(overall_avg.style.background_gradient(subset=["نمره"], cmap="Blues"), use_container_width=True)
+
+    # ------------------ تابع تولید PDF ------------------
+    def generate_student_pdf(student_name, student_data, status_map):
+        buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
-        c.setFont("Helvetica", 12)
-        c.drawString(50, 800, f"کارنامه {student_name}")
-        y = 770
-        for index, row in df.iterrows():
-            c.drawString(50, y, f"{row['درس']}: {row['میانگین']} - {row['وضعیت']}")
-            y -= 20
+        width, height = A4
+
+        # عنوان کارنامه
+        c.setFont("Vazir", 18)
+        c.drawCentredString(width / 2, height - 50, f"کارنامه‌ی {student_name}")
+
+        c.setFont("Vazir", 12)
+        y = height - 100
+
+        # نمایش نمره‌ها و وضعیت کیفی
+        for _, row in student_data.iterrows():
+            lesson = row["درس"]
+            score = row["نمره"]
+            status = status_map.get(score, "نامشخص")
+            text_line = f"درس: {lesson}   |   نمره: {score}   |   وضعیت: {status}"
+            c.drawString(50, y, text_line)
+            y -= 25
+
+            # اگر به پایین صفحه رسیدیم → صفحه جدید
+            if y < 50:
+                c.showPage()
+                c.setFont("Vazir", 12)
+                y = height - 50
+
         c.showPage()
         c.save()
         buffer.seek(0)
         return buffer
 
-    pdf_buffer = generate_pdf(report_df, selected_student)
-    st.download_button(label="📥 دانلود PDF کارنامه", data=pdf_buffer, file_name=f"report_{selected_student}.pdf", mime='application/pdf')
+    # ------------------ دانلود PDF ------------------
+    status_map = {1: "نیاز به تلاش بیشتر", 2: "قابل قبول", 3: "خوب", 4: "خیلی خوب"}
+
+    st.subheader("⬇️ دانلود کارنامه PDF")
+    for student in overall_avg["نام دانش آموز"]:
+        student_data = scores_long[scores_long["نام دانش آموز"] == student]
+        pdf_buffer = generate_student_pdf(student, student_data, status_map)
+        st.download_button(f"دانلود PDF {student}", data=pdf_buffer,
+                           file_name=f"{student}_report.pdf", mime="application/pdf")
+
+else:
+    st.info("برای شروع، فایل اکسل نمرات را بارگذاری کنید.")
