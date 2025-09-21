@@ -14,27 +14,31 @@ if not os.path.exists("data/users.xlsx") or not os.path.exists("data/nomarat_dar
     st.stop()
 
 # -------------------------------
-# بارگذاری اطلاعات کاربران
+# بارگذاری کاربران
 # -------------------------------
 users_df = pd.read_excel("data/users.xlsx")
-users_df.columns = users_df.columns.str.strip().str.replace('\u200c', ' ').str.replace('\xa0', ' ')
+users_df.columns = users_df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
 
 # -------------------------------
-# بارگذاری نمرات (wide format)
+# بارگذاری نمرات از همه شیت‌ها
 # -------------------------------
-scores_df = pd.read_excel("data/nomarat_darsi.xlsx")
-scores_df.columns = scores_df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
+xls = pd.ExcelFile("data/nomarat_darsi.xlsx")
+all_data = []
 
-# اصلاح نام ستون نام دانش‌آموز
-if 'نام دانش آموز' in scores_df.columns:
-    scores_df.rename(columns={'نام دانش آموز':'نام دانش‌آموز'}, inplace=True)
+for sheet_name in xls.sheet_names:
+    df = pd.read_excel(xls, sheet_name=sheet_name)
+    df.columns = df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
+    
+    if 'نام دانش آموز' in df.columns:
+        df.rename(columns={'نام دانش آموز':'نام دانش‌آموز'}, inplace=True)
+    
+    score_columns = [col for col in df.columns if col != 'نام دانش‌آموز']
+    df_long = df.melt(id_vars=['نام دانش‌آموز'], value_vars=score_columns,
+                      var_name='هفته', value_name='نمره')
+    df_long['درس'] = sheet_name  # نام شیت = نام درس
+    all_data.append(df_long)
 
-# ستون‌هایی که نمره‌ها هستند
-score_columns = [col for col in scores_df.columns if col != 'نام دانش‌آموز']
-
-# تبدیل wide به long
-scores_long = scores_df.melt(id_vars=['نام دانش‌آموز'], value_vars=score_columns,
-                              var_name='درس', value_name='نمره')
+scores_long = pd.concat(all_data, ignore_index=True)
 scores_long = scores_long.dropna(subset=['نمره'])
 
 # -------------------------------
@@ -84,6 +88,7 @@ col3.metric("کمترین نمره", lesson_data['نمره'].min())
 st.subheader("📈 نمودار تعاملی کلاس")
 fig_class = px.bar(lesson_data, x='نام دانش‌آموز', y='نمره',
                    color='نمره', color_continuous_scale='Blues',
+                   hover_data=['هفته'],
                    title=f"نمرات درس {selected_lesson}")
 st.plotly_chart(fig_class, use_container_width=True)
 
@@ -91,18 +96,18 @@ st.plotly_chart(fig_class, use_container_width=True)
 # رتبه‌بندی کلاس
 # -------------------------------
 st.subheader("🏆 رتبه‌بندی دانش‌آموزها")
-lesson_rank = lesson_data.sort_values(by='نمره', ascending=False)
+lesson_rank = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().sort_values(ascending=False).reset_index()
 lesson_rank.index = range(1, len(lesson_rank)+1)
-st.dataframe(lesson_rank[['نام دانش‌آموز', 'نمره']])
+st.dataframe(lesson_rank)
 
 # -------------------------------
 # نمودار تعاملی فردی
 # -------------------------------
 st.subheader(f"📊 نمودار نمرات {selected_student}")
 if not student_data.empty:
-    fig_student = px.bar(student_data, x='درس', y='نمره',
+    fig_student = px.bar(student_data, x='هفته', y='نمره',
                          color='نمره', color_continuous_scale='Oranges',
-                         title=f"نمرات {selected_student}")
+                         title=f"نمرات {selected_student} در درس {selected_lesson}")
     st.plotly_chart(fig_student, use_container_width=True)
 
 # -------------------------------
@@ -110,6 +115,7 @@ if not student_data.empty:
 # -------------------------------
 st.subheader("📝 گزارش متنی نمرات")
 if not student_data.empty:
-    st.text(f"دانش‌آموز: {selected_student}\nدرس: {selected_lesson}\nنمره: {student_data['نمره'].values[0]}")
+    for idx, row in student_data.iterrows():
+        st.text(f"{row['هفته']}: {row['نمره']}")
 else:
-    st.text(f"دانش‌آموز {selected_student} هنوز برای درس {selected_lesson} نمره‌ای ندارد.")
+    st.text(f"دانش‌آموز {selected_student} هنوز نمره‌ای برای درس {selected_lesson} ندارد.")
