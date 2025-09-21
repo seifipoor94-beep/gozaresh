@@ -51,7 +51,7 @@ for sheet_name in xls.sheet_names:
     df_long = df.melt(id_vars=['نام دانش‌آموز'], value_vars=score_columns,
                       var_name='هفته', value_name='نمره')
 
-    # تبدیل نمره به عدد
+    # تبدیل نمره به عدد صحیح
     df_long['نمره'] = pd.to_numeric(df_long['نمره'], errors='coerce')
     df_long = df_long.dropna(subset=['نمره'])
     df_long['نمره'] = df_long['نمره'].astype(int)
@@ -96,6 +96,16 @@ lesson_data = scores_long[scores_long['درس'] == selected_lesson]
 student_data = lesson_data[lesson_data['نام دانش‌آموز'] == selected_student]
 
 # -------------------------------
+# نقشه وضعیت کیفی
+# -------------------------------
+status_map = {
+    1: "نیاز به تلاش بیشتر",
+    2: "قابل قبول",
+    3: "خوب",
+    4: "خیلی خوب"
+}
+
+# -------------------------------
 # کارت‌های خلاصه کلاس
 # -------------------------------
 col1, col2, col3 = st.columns(3)
@@ -108,15 +118,8 @@ col3.metric("کمترین نمره", lesson_data['نمره'].min())
 # -------------------------------
 st.subheader("🍩 نمودار وضعیت کیفی کلاس")
 
-status_map = {
-    1: "نیاز به تلاش بیشتر",
-    2: "قابل قبول",
-    3: "خوب",
-    4: "خیلی خوب"
-}
-
 student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
-student_avg['وضعیت'] = student_avg['نمره'].round().map(status_map)
+student_avg['وضعیت'] = student_avg['نمره'].astype(int).map(status_map)
 
 fig_pie = px.pie(
     student_avg,
@@ -192,7 +195,7 @@ else:
 st.subheader("📝 گزارش متنی نمرات")
 if not student_data.empty:
     for idx, row in student_data.iterrows():
-        status = status_map.get(round(row['نمره']), "نامشخص")
+        status = status_map.get(int(row['نمره']), "نامشخص")
         st.text(f"{row['هفته']}: {row['نمره']} ➝ {status}")
 else:
     st.text(f"دانش‌آموز {selected_student} هنوز نمره‌ای برای درس {selected_lesson} ندارد.")
