@@ -1,22 +1,21 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from io import BytesIO
+import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
-# ------------------ تنظیمات اولیه ------------------
-st.set_page_config(page_title="کارنامه دانش‌آموز", layout="wide")
+# ------------------ تنظیمات صفحه ------------------
+st.set_page_config(page_title="📊 سامانه کارنامه", layout="wide")
 
-# تعریف فونت فارسی برای PDF
-pdfmetrics.registerFont(TTFont("Vazir", "Vazir.ttf"))
+# ------------------ ثبت فونت فارسی ------------------
+pdfmetrics.registerFont(TTFont("Vazir", "fonts/Vazir.ttf"))
 
-# پسورد ورود
+# ------------------ ورود کاربر ------------------
 PASSWORD = "1234"
 
-# ------------------ صفحه ورود ------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -58,51 +57,70 @@ if not st.session_state.authenticated:
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# ------------------ داده‌ها ------------------
+# ------------------ بارگذاری فایل اکسل ------------------
 uploaded_file = st.file_uploader("📂 فایل اکسل نمرات را بارگذاری کنید", type=["xlsx"])
 
 if uploaded_file:
     scores_long = pd.read_excel(uploaded_file)
 
-    # اطمینان از عددی بودن نمره
+    # تبدیل ستون نمره به عدد و حذف غیرعددی‌ها
     scores_long["نمره"] = pd.to_numeric(scores_long["نمره"], errors="coerce")
     scores_long = scores_long.dropna(subset=["نمره"])
 
     # میانگین هر دانش‌آموز
     overall_avg = scores_long.groupby("نام دانش آموز")["نمره"].mean().reset_index()
 
-    # ------------------ نمایش ------------------
-    st.subheader("📊 نمودار نمرات")
+    # ------------------ نمودار میانگین ------------------
+    st.subheader("📊 نمودار میانگین نمرات دانش‌آموزان")
     fig = px.bar(overall_avg, x="نام دانش آموز", y="نمره", color="نمره",
                  color_continuous_scale="Blues", title="میانگین نمرات دانش‌آموزان")
     st.plotly_chart(fig, use_container_width=True)
 
-    # جدول کارنامه
+    # ------------------ جدول کارنامه ------------------
     st.subheader("📑 کارنامه کلی")
-    st.dataframe(overall_avg, use_container_width=True)
+    st.dataframe(overall_avg.style.background_gradient(subset=["نمره"], cmap="Blues"), use_container_width=True)
 
-    # ------------------ PDF ------------------
-    def generate_pdf(df):
-        buffer = BytesIO()
+    # ------------------ تابع تولید PDF ------------------
+    def generate_student_pdf(student_name, student_data, status_map):
+        buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
-        c.setFont("Vazir", 14)
-
         width, height = A4
-        c.drawString(200, height - 50, "📖 کارنامه دانش‌آموزان")
 
+        # عنوان کارنامه
+        c.setFont("Vazir", 18)
+        c.drawCentredString(width / 2, height - 50, f"کارنامه‌ی {student_name}")
+
+        c.setFont("Vazir", 12)
         y = height - 100
-        for idx, row in df.iterrows():
-            text = f"{row['نام دانش آموز']} : {round(row['نمره'], 2)}"
-            c.drawString(100, y, text)
-            y -= 30
 
+        # نمایش نمره‌ها و وضعیت کیفی
+        for _, row in student_data.iterrows():
+            lesson = row["درس"]
+            score = row["نمره"]
+            status = status_map.get(score, "نامشخص")
+            text_line = f"درس: {lesson}   |   نمره: {score}   |   وضعیت: {status}"
+            c.drawRightString(width - 50, y, text_line)
+            y -= 25
+            if y < 50:
+                c.showPage()
+                c.setFont("Vazir", 12)
+                y = height - 50
+
+        c.showPage()
         c.save()
         buffer.seek(0)
         return buffer
 
-    pdf_buffer = generate_pdf(overall_avg)
-    st.download_button("⬇️ دانلود کارنامه PDF", data=pdf_buffer,
-                       file_name="report.pdf", mime="application/pdf")
+    # ------------------ دانلود PDF ------------------
+    # تعریف وضعیت عددی → متنی
+    status_map = {1: "نیاز به تلاش بیشتر", 2: "قابل قبول", 3: "خوب", 4: "خیلی خوب"}
+
+    st.subheader("⬇️ دانلود کارنامه PDF")
+    for student in overall_avg["نام دانش آموز"]:
+        student_data = scores_long[scores_long["نام دانش آموز"] == student]
+        pdf_buffer = generate_student_pdf(student, student_data, status_map)
+        st.download_button(f"دانلود PDF {student}", data=pdf_buffer,
+                           file_name=f"{student}_report.pdf", mime="application/pdf")
 
 else:
     st.info("برای شروع، فایل اکسل نمرات را بارگذاری کنید.")
