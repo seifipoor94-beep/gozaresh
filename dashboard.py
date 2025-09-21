@@ -39,7 +39,7 @@ for sheet_name in xls.sheet_names:
     df_long = df.melt(id_vars=['نام دانش‌آموز'], value_vars=score_columns,
                       var_name='هفته', value_name='نمره')
     
-    # تبدیل نمره به عددی
+    # تبدیل نمره به عددی (انتظار داریم مقادیر 1 تا 4 باشه)
     df_long['نمره'] = pd.to_numeric(df_long['نمره'], errors='coerce')
     df_long = df_long.dropna(subset=['نمره'])
     
@@ -91,9 +91,9 @@ col2.metric("بیشترین نمره", lesson_data['نمره'].max())
 col3.metric("کمترین نمره", lesson_data['نمره'].min())
 
 # -------------------------------
-# نمودار تعاملی کلاس
+# نمودار میله‌ای کلاس
 # -------------------------------
-st.subheader("📈 نمودار تعاملی کلاس")
+st.subheader("📈 نمودار کلاس")
 fig_class = px.bar(lesson_data, x='نام دانش‌آموز', y='نمره',
                    color='نمره', color_continuous_scale='Blues',
                    hover_data=['هفته'],
@@ -109,24 +109,39 @@ lesson_rank.index = range(1, len(lesson_rank)+1)
 st.dataframe(lesson_rank)
 
 # -------------------------------
-# نمودار دایره‌ای وضعیت کل کلاس
+# نمودار دایره‌ای وضعیت کیفی (بر اساس میانگین کلی)
 # -------------------------------
-st.subheader("🍰 نمودار دایره‌ای وضعیت کل کلاس")
-def categorize_grade(score):
-    if score >= 17:
-        return "عالی"
-    elif score >= 12:
-        return "متوسط"
-    else:
-        return "ضعیف"
+st.subheader("🍩 نمودار وضعیت کیفی کلاس")
 
-lesson_data['وضعیت'] = lesson_data['نمره'].apply(categorize_grade)
-fig_pie = px.pie(lesson_data, names='وضعیت', title=f"وضعیت کلاس در درس {selected_lesson}",
-                 color='وضعیت', color_discrete_map={'عالی':'green', 'متوسط':'orange', 'ضعیف':'red'})
+# نگاشت سطوح کیفی
+status_map = {
+    1: "نیاز به تلاش بیشتر",
+    2: "قابل قبول",
+    3: "خوب",
+    4: "خیلی خوب"
+}
+
+# محاسبه میانگین هر دانش‌آموز
+student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
+student_avg['وضعیت'] = student_avg['نمره'].round().map(status_map)
+
+fig_pie = px.pie(
+    student_avg,
+    names='وضعیت',
+    title=f"وضعیت کیفی کلاس در درس {selected_lesson}",
+    color='وضعیت',
+    color_discrete_map={
+        "نیاز به تلاش بیشتر": "red",
+        "قابل قبول": "orange",
+        "خوب": "blue",
+        "خیلی خوب": "green"
+    }
+)
+
 st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------
-# نمودار تعاملی فردی
+# نمودار فردی
 # -------------------------------
 st.subheader(f"📊 نمودار نمرات {selected_student}")
 if not student_data.empty:
@@ -136,11 +151,12 @@ if not student_data.empty:
     st.plotly_chart(fig_student, use_container_width=True)
 
 # -------------------------------
-# گزارش متنی فردی
+# گزارش متنی فردی (با وضعیت کیفی)
 # -------------------------------
 st.subheader("📝 گزارش متنی نمرات")
 if not student_data.empty:
     for idx, row in student_data.iterrows():
-        st.text(f"{row['هفته']}: {row['نمره']}")
+        status = status_map.get(round(row['نمره']), "نامشخص")
+        st.text(f"{row['هفته']}: {row['نمره']} ➝ {status}")
 else:
     st.text(f"دانش‌آموز {selected_student} هنوز نمره‌ای برای درس {selected_lesson} ندارد.")
