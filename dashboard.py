@@ -3,20 +3,26 @@ import pandas as pd
 import plotly.express as px
 
 # ------------------ تنظیمات صفحه ------------------
-st.set_page_config(page_title="📊 سامانه کارنامه", layout="wide")
+st.set_page_config(page_title="📊 مدیریت عملکرد کلاس", layout="wide")
 
-# ------------------ ورود کاربر ------------------
-PASSWORD = "1234"
+# ------------------ داده کاربران ------------------
+# در فایل users.xlsx ذخیره شده
+# ستون‌ها: نام کاربر | نقش | رمز ورود
+users_df = pd.read_excel("data/users.xlsx")
+users_df.columns = users_df.columns.str.strip()
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
+    st.session_state.user_role = None
+    st.session_state.user_name = None
 
+# ------------------ ورود با نقش ------------------
 if not st.session_state.authenticated:
     st.markdown(
         """
         <style>
         .login-card {
-            max-width: 400px;
+            max-width: 450px;
             margin: auto;
             margin-top: 150px;
             padding: 30px;
@@ -42,18 +48,27 @@ if not st.session_state.authenticated:
         }
         </style>
         <div class="login-card">
-            <div class="login-title">🔑 ورود به سامانه کارنامه</div>
+            <div class="login-title">📊 مدیریت عملکرد کلاس</div>
         """,
         unsafe_allow_html=True,
     )
 
+    role = st.selectbox("نقش خود را انتخاب کنید:", ["والد", "آموزگار", "مدیر"])
+    user_name_input = st.text_input("نام کاربری")
     password_input = st.text_input("رمز ورود", type="password")
-    if st.button("ورود", key="login_button"):
-        if password_input == PASSWORD:
+
+    if st.button("ورود"):
+        valid_user = users_df[(users_df["نقش"] == role) & 
+                              (users_df["نام کاربر"] == user_name_input) & 
+                              (users_df["رمز ورود"] == password_input)]
+        if not valid_user.empty:
             st.session_state.authenticated = True
+            st.session_state.user_role = role
+            st.session_state.user_name = user_name_input
+            st.success(f"✅ خوش آمدید {user_name_input} عزیز! شما به عنوان {role} وارد شدید.")
             st.rerun()
         else:
-            st.error("❌ رمز اشتباه است")
+            st.error("❌ نام کاربری، نقش یا رمز اشتباه است")
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
@@ -63,8 +78,6 @@ uploaded_file = st.file_uploader("📂 فایل اکسل نمرات را بار�
 
 if uploaded_file:
     scores_long = pd.read_excel(uploaded_file)
-
-    # تبدیل ستون نمره به عدد و حذف غیرعددی‌ها
     scores_long["نمره"] = pd.to_numeric(scores_long["نمره"], errors="coerce")
     scores_long = scores_long.dropna(subset=["نمره"])
 
