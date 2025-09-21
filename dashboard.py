@@ -10,22 +10,27 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 import plotly.express as px
 import os
-import streamlit as st
 
-# ------------------ مدیریت جلسه ------------------
+# ------------------ تنظیم فونت matplotlib ------------------
+rcParams['font.family'] = 'Tahoma'
+rcParams['axes.unicode_minus'] = False
+
+st.set_page_config(page_title="📊 داشبورد پیشرفته نمرات", layout="wide")
+
+# ------------------ صفحه ورود یک‌بار کلیکی ------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user_role = None
+    st.session_state.user_name = None
 
-# ------------------ داده کاربران ------------------
-# ستون‌ها: نقش | رمز ورود
-users = {
-    "والد": "123",
-    "آموزگار": "456",
-    "مدیر": "789"
-}
+# بارگذاری کاربران
+if not os.path.exists("data/users.xlsx"):
+    st.error("❌ فایل کاربران پیدا نشد! لطفا مسیر را بررسی کنید.")
+    st.stop()
+users_df = pd.read_excel("data/users.xlsx")
+users_df.columns = users_df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
 
-# ------------------ صفحه ورود ------------------
+# اگر هنوز وارد نشده
 if not st.session_state.authenticated:
     st.markdown(
         """
@@ -63,50 +68,31 @@ if not st.session_state.authenticated:
         unsafe_allow_html=True,
     )
 
-    role = st.selectbox("نقش خود را انتخاب کنید:", list(users.keys()))
+    role = st.selectbox("نقش خود را انتخاب کنید:", users_df['نقش'].unique())
     password_input = st.text_input("رمز ورود", type="password")
 
     if st.button("ورود"):
-        if password_input == users[role]:
+        valid_user = users_df[(users_df["نقش"] == role) & (users_df["رمز ورود"] == password_input)]
+        if not valid_user.empty:
             st.session_state.authenticated = True
             st.session_state.user_role = role
-            st.success(f"✅ خوش آمدید! شما به عنوان {role} وارد شدید.")
+            st.session_state.user_name = valid_user.iloc[0]["نام کاربر"]
+            st.success(f"✅ خوش آمدید {st.session_state.user_name} عزیز! شما به‌عنوان {role} وارد شده‌اید.")
             st.rerun()
         else:
             st.error("❌ نقش یا رمز اشتباه است")
-
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# ------------------ داشبورد اصلی ------------------
-st.title(f"📊 داشبورد مدیریت کلاس - نقش: {st.session_state.user_role}")
-st.write("اینجا می‌توانید نمودارها و کارنامه‌ها را نمایش دهید.")
-
-# -------------------------------
-# فونت فارسی matplotlib
-# -------------------------------
-rcParams['font.family'] = 'Tahoma'
-rcParams['axes.unicode_minus'] = False
-
-st.set_page_config(page_title="📊 داشبورد پیشرفته نمرات", layout="wide")
+# ------------------ ادامه داشبورد ------------------
 st.title("📊 داشبورد پیشرفته نمرات دانش‌آموز")
 
-# -------------------------------
 # بررسی فایل‌ها
-# -------------------------------
-if not os.path.exists("data/users.xlsx") or not os.path.exists("data/nomarat_darsi.xlsx"):
-    st.error("❌ یکی از فایل‌های داده پیدا نشد! لطفا مسیرها را بررسی کنید.")
+if not os.path.exists("data/nomarat_darsi.xlsx"):
+    st.error("❌ فایل نمرات پیدا نشد! لطفا مسیر را بررسی کنید.")
     st.stop()
 
-# -------------------------------
-# بارگذاری کاربران
-# -------------------------------
-users_df = pd.read_excel("data/users.xlsx")
-users_df.columns = users_df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
-
-# -------------------------------
 # بارگذاری نمرات از همه شیت‌ها
-# -------------------------------
 xls = pd.ExcelFile("data/nomarat_darsi.xlsx")
 all_data = []
 
@@ -141,23 +127,10 @@ for sheet_name in xls.sheet_names:
 
 scores_long = pd.concat(all_data, ignore_index=True)
 
-# -------------------------------
-# فرم ورود
-# -------------------------------
-st.sidebar.title("🔐 ورود به داشبورد")
-entered_role = st.sidebar.selectbox("نقش خود را انتخاب کنید:", ["والد", "آموزگار", "مدیر"])
-entered_code = st.sidebar.text_input("رمز ورود:", type="password")
-
-valid_user = users_df[(users_df["نقش"] == entered_role) & (users_df["رمز ورود"] == entered_code)]
-if valid_user.empty:
-    st.warning("❌ رمز یا نقش اشتباه است.")
-    st.stop()
-user_name = valid_user.iloc[0]["نام کاربر"]
-st.success(f"✅ خوش آمدید {user_name} عزیز! شما به‌عنوان {entered_role} وارد شده‌اید.")
-
-# -------------------------------
 # انتخاب درس و دانش‌آموز
-# -------------------------------
+entered_role = st.session_state.user_role
+user_name = st.session_state.user_name
+
 if entered_role == "والد":
     student_scores = scores_long[scores_long['نام دانش‌آموز'] == user_name]
     lessons = student_scores['درس'].unique()
@@ -172,15 +145,11 @@ else:
 lesson_data = scores_long[scores_long['درس'] == selected_lesson]
 student_data = lesson_data[lesson_data['نام دانش‌آموز'] == selected_student]
 
-# -------------------------------
 # وضعیت کیفی
-# -------------------------------
 status_map = {1:"نیاز به تلاش بیشتر", 2:"قابل قبول", 3:"خوب", 4:"خیلی خوب"}
 status_colors = {"نیاز به تلاش بیشتر": "red", "قابل قبول":"orange","خوب":"blue","خیلی خوب":"green"}
 
-# -------------------------------
 # نمودار دایره‌ای کلاس
-# -------------------------------
 st.subheader("🍩 نمودار وضعیت کیفی کلاس")
 student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
 student_avg['وضعیت'] = student_avg['نمره'].round().astype(int).map(status_map)
@@ -193,9 +162,7 @@ fig_pie = px.pie(
 )
 st.plotly_chart(fig_pie, use_container_width=True)
 
-# -------------------------------
 # نمودار خطی دانش‌آموز
-# -------------------------------
 st.subheader(f"📈 روند نمرات {selected_student}")
 if not student_data.empty:
     fig_line = px.line(
@@ -208,27 +175,21 @@ if not student_data.empty:
     fig_line.update_traces(line_color='orange')
     st.plotly_chart(fig_line, use_container_width=True)
 
-# -------------------------------
 # رتبه‌بندی درس به درس
-# -------------------------------
 st.subheader("🏆 رتبه‌بندی درس به درس")
 lesson_rank = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
 lesson_rank['رتبه'] = lesson_rank['نمره'].rank(ascending=False, method='min').astype(int)
 lesson_rank = lesson_rank.sort_values('رتبه')
 st.dataframe(lesson_rank[['رتبه','نام دانش‌آموز','نمره']])
 
-# -------------------------------
 # رتبه‌بندی کلی بر اساس میانگین کل دروس
-# -------------------------------
 st.subheader("🏅 رتبه‌بندی کلی کلاس")
 overall_avg = scores_long.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
 overall_avg['رتبه'] = overall_avg['نمره'].rank(ascending=False, method='min').astype(int)
 overall_avg = overall_avg.sort_values('رتبه')
 st.dataframe(overall_avg[['رتبه','نام دانش‌آموز','نمره']])
 
-# -------------------------------
 # کارنامه دانش‌آموز
-# -------------------------------
 st.subheader(f"📝 کارنامه {selected_student}")
 student_overall = []
 for lesson in scores_long['درس'].unique():
@@ -239,82 +200,3 @@ for lesson in scores_long['درس'].unique():
     student_overall.append({"درس":lesson,"میانگین":round(avg_score,2),"وضعیت":status})
 df_card = pd.DataFrame(student_overall)
 st.dataframe(df_card.style.applymap(lambda v: f"color:{status_colors[v]}" if v in status_colors else ""))
-
-# -------------------------------
-# تولید PDF با فونت فارسی و نمودارهای جدا
-# -------------------------------
-def generate_pdf(student_name, scores_long, status_map, status_colors):
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    # ثبت فونت فارسی
-    if os.path.exists("fonts/Vazir.ttf"):
-        pdfmetrics.registerFont(TTFont('Vazir', 'fonts/Vazir.ttf'))
-        font_name = 'Vazir'
-    else:
-        font_name = "Helvetica"
-    c.setFont(font_name, 18)
-    c.drawCentredString(width/2, height-50, f"کارنامه دانش‌آموز {student_name}")
-
-    # جدول کارنامه
-    c.setFont(font_name, 14)
-    y = height-100
-    c.drawString(50,y,"درس")
-    c.drawString(250,y,"میانگین")
-    c.drawString(400,y,"وضعیت")
-    y -= 20
-    c.setFont(font_name, 12)
-    for lesson in scores_long['درس'].unique():
-        df_lesson = scores_long[(scores_long['درس']==lesson) & (scores_long['نام دانش‌آموز']==student_name)]
-        if df_lesson.empty: continue
-        avg_score = df_lesson['نمره'].mean()
-        status = status_map.get(int(round(avg_score)),"نامشخص")
-        c.drawString(50,y,lesson)
-        c.drawString(250,y,str(round(avg_score,2)))
-        c.drawString(400,y,status)
-        y -= 20
-
-    # نمودار خطی جدا
-    df_student = scores_long[scores_long['نام دانش‌آموز']==student_name]
-    plt.figure(figsize=(6,3))
-    for lesson in df_student['درس'].unique():
-        df_l = df_student[df_student['درس']==lesson]
-        plt.plot(df_l['هفته'], df_l['نمره'], marker='o', label=lesson)
-    plt.title("روند نمرات دانش‌آموز", fontsize=12)
-    plt.xlabel("هفته", fontsize=10)
-    plt.ylabel("نمره", fontsize=10)
-    plt.legend()
-    line_buf = BytesIO()
-    plt.tight_layout()
-    plt.savefig(line_buf, format='png')
-    plt.close()
-    line_buf.seek(0)
-    c.drawImage(ImageReader(line_buf),50,y-150,width=500,height=150)
-    y -= 170
-
-    # نمودار دایره‌ای کلاس جدا
-    class_status = df_student.groupby('درس')['نمره'].mean().round().astype(int).map(status_map)
-    status_counts = class_status.value_counts()
-    plt.figure(figsize=(5,3))
-    plt.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%',
-            colors=['red','orange','blue','green'])
-    plt.title("وضعیت کیفی کلاس", fontsize=12)
-    pie_buf = BytesIO()
-    plt.savefig(pie_buf, format='png')
-    plt.close()
-    pie_buf.seek(0)
-    c.drawImage(ImageReader(pie_buf),50,y-150,width=300,height=150)
-
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-pdf_buf = generate_pdf(selected_student, scores_long, status_map, status_colors)
-st.download_button(
-    label="📥 دانلود کارنامه کامل با نمودارها",
-    data=pdf_buf,
-    file_name=f"کارنامه_{selected_student}.pdf",
-    mime="application/pdf"
-)
-
