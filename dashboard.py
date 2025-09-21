@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -91,25 +92,7 @@ col2.metric("بیشترین نمره", lesson_data['نمره'].max())
 col3.metric("کمترین نمره", lesson_data['نمره'].min())
 
 # -------------------------------
-# نمودار میله‌ای کلاس
-# -------------------------------
-st.subheader("📈 نمودار کلاس")
-fig_class = px.bar(lesson_data, x='نام دانش‌آموز', y='نمره',
-                   color='نمره', color_continuous_scale='Blues',
-                   hover_data=['هفته'],
-                   title=f"نمرات درس {selected_lesson}")
-st.plotly_chart(fig_class, use_container_width=True)
-
-# -------------------------------
-# رتبه‌بندی کلاس
-# -------------------------------
-st.subheader("🏆 رتبه‌بندی دانش‌آموزها")
-lesson_rank = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().sort_values(ascending=False).reset_index()
-lesson_rank.index = range(1, len(lesson_rank)+1)
-st.dataframe(lesson_rank)
-
-# -------------------------------
-# نمودار دایره‌ای وضعیت کیفی (بر اساس میانگین کلی)
+# نمودار دایره‌ای وضعیت کیفی کلاس
 # -------------------------------
 st.subheader("🍩 نمودار وضعیت کیفی کلاس")
 
@@ -121,14 +104,14 @@ status_map = {
     4: "خیلی خوب"
 }
 
-# محاسبه میانگین هر دانش‌آموز
+# محاسبه میانگین هر دانش‌آموز در این درس
 student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
 student_avg['وضعیت'] = student_avg['نمره'].round().map(status_map)
 
 fig_pie = px.pie(
     student_avg,
     names='وضعیت',
-    title=f"وضعیت کیفی کلاس در درس {selected_lesson}",
+    title=f"درصد وضعیت کیفی دانش‌آموزان در درس {selected_lesson}",
     color='وضعیت',
     color_discrete_map={
         "نیاز به تلاش بیشتر": "red",
@@ -141,14 +124,20 @@ fig_pie = px.pie(
 st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------
-# نمودار فردی
+# نمودار فردی (خطی)
 # -------------------------------
-st.subheader(f"📊 نمودار نمرات {selected_student}")
+st.subheader(f"📊 روند نمرات {selected_student}")
+
 if not student_data.empty:
-    fig_student = px.bar(student_data, x='هفته', y='نمره',
-                         color='نمره', color_continuous_scale='Oranges',
-                         title=f"نمرات {selected_student} در درس {selected_lesson}")
-    st.plotly_chart(fig_student, use_container_width=True)
+    fig_line = px.line(
+        student_data,
+        x='هفته',
+        y='نمره',
+        markers=True,
+        title=f"روند تغییرات نمرات {selected_student} در درس {selected_lesson}"
+    )
+    fig_line.update_traces(line_color='orange')
+    st.plotly_chart(fig_line, use_container_width=True)
 
 # -------------------------------
 # گزارش متنی فردی (با وضعیت کیفی)
