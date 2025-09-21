@@ -3,14 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from io import BytesIO
-from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import ImageReader
 import plotly.express as px
 import os
 
 # -------------------------------
-# فونت فارسی
+# فونت فارسی برای matplotlib
 # -------------------------------
 rcParams['font.family'] = 'Tahoma'
 rcParams['axes.unicode_minus'] = False
@@ -106,7 +108,7 @@ status_map = {1:"نیاز به تلاش بیشتر", 2:"قابل قبول", 3:"�
 status_colors = {"نیاز به تلاش بیشتر": "red", "قابل قبول":"orange","خوب":"blue","خیلی خوب":"green"}
 
 # -------------------------------
-# نمودار دایره‌ای کلاس (جدای خطی)
+# نمودار دایره‌ای کلاس
 # -------------------------------
 st.subheader("🍩 نمودار وضعیت کیفی کلاس")
 student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
@@ -121,7 +123,7 @@ fig_pie = px.pie(
 st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------
-# نمودار خطی دانش‌آموز (جدای دایره‌ای)
+# نمودار خطی دانش‌آموز
 # -------------------------------
 st.subheader(f"📈 روند نمرات {selected_student}")
 if not student_data.empty:
@@ -150,23 +152,30 @@ df_card = pd.DataFrame(student_overall)
 st.dataframe(df_card.style.applymap(lambda v: f"color:{status_colors[v]}" if v in status_colors else ""))
 
 # -------------------------------
-# تولید PDF با کارنامه و نمودارها
+# تولید PDF با فونت فارسی و نمودارهای جدا
 # -------------------------------
 def generate_pdf(student_name, scores_long, status_map, status_colors):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-    c.setFont("Helvetica-Bold", 18)
+
+    # ثبت فونت فارسی
+    if os.path.exists("fonts/Vazir.ttf"):
+        pdfmetrics.registerFont(TTFont('Vazir', 'fonts/Vazir.ttf'))
+        font_name = 'Vazir'
+    else:
+        font_name = "Helvetica"
+    c.setFont(font_name, 18)
     c.drawCentredString(width/2, height-50, f"کارنامه دانش‌آموز {student_name}")
-    
+
     # جدول کارنامه
-    c.setFont("Helvetica-Bold",14)
+    c.setFont(font_name, 14)
     y = height-100
     c.drawString(50,y,"درس")
     c.drawString(250,y,"میانگین")
     c.drawString(400,y,"وضعیت")
     y -= 20
-    c.setFont("Helvetica",12)
+    c.setFont(font_name, 12)
     for lesson in scores_long['درس'].unique():
         df_lesson = scores_long[(scores_long['درس']==lesson) & (scores_long['نام دانش‌آموز']==student_name)]
         if df_lesson.empty: continue
@@ -176,16 +185,16 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
         c.drawString(250,y,str(round(avg_score,2)))
         c.drawString(400,y,status)
         y -= 20
-    
+
     # میانگین کل
     overall_avg = scores_long[scores_long['نام دانش‌آموز']==student_name]['نمره'].mean()
     overall_status = status_map.get(int(round(overall_avg)),"نامشخص")
     y -= 10
-    c.setFont("Helvetica-Bold",14)
+    c.setFont(font_name,14)
     c.drawString(50,y,f"میانگین کل: {round(overall_avg,2)} → {overall_status}")
     y -= 30
 
-    # نمودار خطی
+    # نمودار خطی جدا
     df_student = scores_long[scores_long['نام دانش‌آموز']==student_name]
     plt.figure(figsize=(6,3))
     for lesson in df_student['درس'].unique():
@@ -203,13 +212,13 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     c.drawImage(ImageReader(line_buf),50,y-150,width=500,height=150)
     y -= 170
 
-    # نمودار دایره‌ای کلاس
-    class_status = scores_long.groupby(['درس','نام دانش‌آموز'])['نمره'].mean().astype(int).map(status_map)
+    # نمودار دایره‌ای جدا
+    class_status = df_student.groupby('درس')['نمره'].mean().round().astype(int).map(status_map)
     status_counts = class_status.value_counts()
     plt.figure(figsize=(5,3))
     plt.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%',
             colors=['red','orange','blue','green'])
-    plt.title("وضعیت کیفی کل کلاس", fontsize=12)
+    plt.title("وضعیت کیفی کلاس", fontsize=12)
     pie_buf = BytesIO()
     plt.savefig(pie_buf, format='png')
     plt.close()
