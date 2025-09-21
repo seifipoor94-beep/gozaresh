@@ -10,6 +10,77 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 import plotly.express as px
 import os
+import streamlit as st
+
+# ------------------ مدیریت جلسه ------------------
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.user_role = None
+
+# ------------------ داده کاربران ------------------
+# ستون‌ها: نقش | رمز ورود
+users = {
+    "والد": "123",
+    "آموزگار": "456",
+    "مدیر": "789"
+}
+
+# ------------------ صفحه ورود ------------------
+if not st.session_state.authenticated:
+    st.markdown(
+        """
+        <style>
+        .login-card {
+            max-width: 400px;
+            margin: auto;
+            margin-top: 150px;
+            padding: 30px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #f0f4ff 0%, #dfe9f3 100%);
+            box-shadow: 0px 8px 20px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .login-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .login-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 28px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        </style>
+        <div class="login-card">
+            <div class="login-title">📊 مدیریت عملکرد کلاس</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    role = st.selectbox("نقش خود را انتخاب کنید:", list(users.keys()))
+    password_input = st.text_input("رمز ورود", type="password")
+
+    if st.button("ورود"):
+        if password_input == users[role]:
+            st.session_state.authenticated = True
+            st.session_state.user_role = role
+            st.success(f"✅ خوش آمدید! شما به عنوان {role} وارد شدید.")
+            st.rerun()
+        else:
+            st.error("❌ نقش یا رمز اشتباه است")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
+# ------------------ داشبورد اصلی ------------------
+st.title(f"📊 داشبورد مدیریت کلاس - نقش: {st.session_state.user_role}")
+st.write("اینجا می‌توانید نمودارها و کارنامه‌ها را نمایش دهید.")
 
 # -------------------------------
 # فونت فارسی matplotlib
@@ -246,3 +317,4 @@ st.download_button(
     file_name=f"کارنامه_{selected_student}.pdf",
     mime="application/pdf"
 )
+
