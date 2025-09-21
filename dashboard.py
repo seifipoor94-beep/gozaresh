@@ -23,8 +23,17 @@ users_df.columns = users_df.columns.str.strip().str.replace('\u200c', ' ').str.r
 # بارگذاری نمرات
 # -------------------------------
 scores_df = pd.read_excel("data/nomarat_darsi.xlsx")
+
 # پاکسازی ستون‌ها برای جلوگیری از مشکلات فاصله و کاراکترهای اضافی
 scores_df.columns = scores_df.columns.str.strip().str.replace('\u200c', ' ').str.replace('\xa0', ' ')
+
+# اصلاح نام ستون‌ها اگر نیاز باشد
+if 'نام دانش آموز' in scores_df.columns:
+    scores_df.rename(columns={'نام دانش آموز': 'نام دانش‌آموز'}, inplace=True)
+if 'درس ' in scores_df.columns:
+    scores_df.rename(columns={'درس ': 'درس'}, inplace=True)
+if 'نمره ' in scores_df.columns:
+    scores_df.rename(columns={'نمره ': 'نمره'}, inplace=True)
 
 # بررسی ستون‌های مورد نیاز
 required_columns = ['نام دانش‌آموز', 'درس', 'نمره']
