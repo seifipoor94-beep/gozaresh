@@ -190,7 +190,7 @@ else:
     st.text(f"دانش‌آموز {selected_student} هنوز نمره‌ای برای درس {selected_lesson} ندارد.")
 
 # -------------------------------
-# تولید PDF رنگی با جدول و نمودارها
+# تولید PDF رنگی با جدول و نمودارها (نسخه بدون خطای getFillColorRGB)
 # -------------------------------
 def generate_full_pdf(student_name, scores_long, status_map, status_colors):
     buffer = BytesIO()
@@ -216,15 +216,19 @@ def generate_full_pdf(student_name, scores_long, status_map, status_colors):
         avg_score_int = int(round(avg_score))
         status = status_map.get(avg_score_int,"نامشخص")
         # رنگ وضعیت
-        if status=="نیاز به تلاش بیشتر": c.setFillColorRGB(1,0,0)
-        elif status=="قابل قبول": c.setFillColorRGB(1,0.65,0)
-        elif status=="خوب": c.setFillColorRGB(0,0,1)
-        elif status=="خیلی خوب": c.setFillColorRGB(0,0.5,0)
-        else: c.setFillColorRGB(0,0,0)
+        if status=="نیاز به تلاش بیشتر": 
+            c.setFillColorRGB(1,0,0)
+        elif status=="قابل قبول": 
+            c.setFillColorRGB(1,0.65,0)
+        elif status=="خوب": 
+            c.setFillColorRGB(0,0,1)
+        elif status=="خیلی خوب": 
+            c.setFillColorRGB(0,0.5,0)
+        else: 
+            c.setFillColorRGB(0,0,0)
         c.drawString(50,y,lesson)
         c.setFillColorRGB(0,0,0)
         c.drawString(250,y,f"{round(avg_score,2)}")
-        c.setFillColorRGB(*c.getFillColorRGB())
         c.drawString(400,y,status)
         y -= 20
 
