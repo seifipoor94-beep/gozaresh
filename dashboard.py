@@ -97,7 +97,7 @@ lesson_data = scores_long[scores_long['درس'] == selected_lesson]
 student_data = lesson_data[lesson_data['نام دانش‌آموز'] == selected_student]
 
 # -------------------------------
-# نقشه وضعیت کیفی
+# وضعیت کیفی و رنگ‌بندی
 # -------------------------------
 status_map = {1:"نیاز به تلاش بیشتر", 2:"قابل قبول", 3:"خوب", 4:"خیلی خوب"}
 status_colors = {"نیاز به تلاش بیشتر": "red", "قابل قبول":"orange","خوب":"blue","خیلی خوب":"green"}
@@ -114,7 +114,8 @@ col3.metric("کمترین نمره", lesson_data['نمره'].min())
 # نمودار دایره‌ای وضعیت کیفی کلاس
 # -------------------------------
 st.subheader("🍩 نمودار وضعیت کیفی کلاس")
-student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().astype(int).map(status_map).reset_index(name='وضعیت')
+student_avg = lesson_data.groupby('نام دانش‌آموز')['نمره'].mean().reset_index()
+student_avg['وضعیت'] = student_avg['نمره'].round().astype(int).map(status_map)
 fig_pie = px.pie(
     student_avg,
     names='وضعیت',
@@ -125,16 +126,16 @@ fig_pie = px.pie(
 st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------
-# رتبه‌بندی کلاس (فقط برای معلم و مدیر)
+# رتبه‌بندی کلاس
 # -------------------------------
 if entered_role in ["آموزگار", "مدیر"]:
     st.subheader("🏆 رتبه‌بندی دانش‌آموزان در این درس")
     ranking = student_avg.sort_values(by='نمره', ascending=False).reset_index(drop=True)
     ranking.index = ranking.index + 1
-    st.dataframe(ranking[['نام دانش‌آموز', 'نمره', 'وضعیت']])
+    st.dataframe(ranking[['نام دانش‌آموز','نمره','وضعیت']])
 
 # -------------------------------
-# نمودار خطی دانش‌آموز
+# نمودار خطی روند دانش‌آموز
 # -------------------------------
 st.subheader(f"📊 روند نمرات {selected_student}")
 if not student_data.empty:
@@ -154,11 +155,11 @@ if not student_data.empty:
 st.subheader("⚖️ مقایسه با میانگین کلاس")
 student_avg_score = student_data['نمره'].mean()
 class_avg_score = lesson_data['نمره'].mean()
-diff = round(student_avg_score - class_avg_score, 2)
+diff = round(student_avg_score - class_avg_score,2)
 
 comparison_df = pd.DataFrame({
-    "مقایسه": ["میانگین کلاس", f"{selected_student}"],
-    "نمره": [class_avg_score, student_avg_score]
+    "مقایسه":["میانگین کلاس",f"{selected_student}"],
+    "نمره":[class_avg_score,student_avg_score]
 })
 
 fig_compare = px.bar(
@@ -170,9 +171,9 @@ fig_compare = px.bar(
 )
 st.plotly_chart(fig_compare, use_container_width=True)
 
-if diff > 0:
+if diff>0:
     st.success(f"✅ {selected_student} به طور میانگین {abs(diff)} نمره بالاتر از میانگین کلاس است.")
-elif diff < 0:
+elif diff<0:
     st.warning(f"⚠️ {selected_student} به طور میانگین {abs(diff)} نمره پایین‌تر از میانگین کلاس است.")
 else:
     st.info(f"ℹ️ {selected_student} دقیقا برابر با میانگین کلاس است.")
@@ -182,90 +183,90 @@ else:
 # -------------------------------
 st.subheader("📝 گزارش متنی نمرات")
 if not student_data.empty:
-    for idx, row in student_data.iterrows():
-        status = status_map.get(int(row['نمره']), "نامشخص")
+    for idx,row in student_data.iterrows():
+        status = status_map.get(int(row['نمره']),"نامشخص")
         st.text(f"{row['هفته']}: {row['نمره']} ➝ {status}")
 else:
     st.text(f"دانش‌آموز {selected_student} هنوز نمره‌ای برای درس {selected_lesson} ندارد.")
 
 # -------------------------------
-# تولید PDF با کارنامه رنگی و نمودارها
+# تولید PDF رنگی با جدول و نمودارها
 # -------------------------------
 def generate_full_pdf(student_name, scores_long, status_map, status_colors):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(width/2, height - 50, f"کارنامه دانش‌آموز {student_name}")
+    c.setFont("Helvetica-Bold",18)
+    c.drawCentredString(width/2,height-50,f"کارنامه دانش‌آموز {student_name}")
 
     # جدول درس‌ها
     lessons = scores_long['درس'].unique()
     y = height - 100
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, "درس")
-    c.drawString(250, y, "میانگین نمره")
-    c.drawString(400, y, "وضعیت کیفی")
+    c.setFont("Helvetica-Bold",14)
+    c.drawString(50,y,"درس")
+    c.drawString(250,y,"میانگین نمره")
+    c.drawString(400,y,"وضعیت کیفی")
     y -= 20
-    c.setFont("Helvetica", 12)
+    c.setFont("Helvetica",12)
     for lesson in lessons:
         df = scores_long[(scores_long['درس']==lesson) & (scores_long['نام دانش‌آموز']==student_name)]
         if df.empty: continue
         avg_score = df['نمره'].mean()
         avg_score_int = int(round(avg_score))
-        status = status_map.get(avg_score_int, "نامشخص")
+        status = status_map.get(avg_score_int,"نامشخص")
         # رنگ وضعیت
-        c.setFillColorRGB(0,0,0)
         if status=="نیاز به تلاش بیشتر": c.setFillColorRGB(1,0,0)
         elif status=="قابل قبول": c.setFillColorRGB(1,0.65,0)
         elif status=="خوب": c.setFillColorRGB(0,0,1)
         elif status=="خیلی خوب": c.setFillColorRGB(0,0.5,0)
-        c.drawString(50, y, lesson)
+        else: c.setFillColorRGB(0,0,0)
+        c.drawString(50,y,lesson)
         c.setFillColorRGB(0,0,0)
-        c.drawString(250, y, f"{round(avg_score,2)}")
-        c.setFillColorRGB(*c.getFillColorRGB()) # رنگ وضعیت
-        c.drawString(400, y, status)
+        c.drawString(250,y,f"{round(avg_score,2)}")
+        c.setFillColorRGB(*c.getFillColorRGB())
+        c.drawString(400,y,status)
         y -= 20
 
     # میانگین کل
     student_overall_avg = scores_long[scores_long['نام دانش‌آموز']==student_name]['نمره'].mean()
-    overall_status = status_map.get(int(round(student_overall_avg)), "نامشخص")
+    overall_status = status_map.get(int(round(student_overall_avg)),"نامشخص")
     y -= 10
-    c.setFont("Helvetica-Bold", 14)
+    c.setFont("Helvetica-Bold",14)
     c.setFillColorRGB(0,0,0)
-    c.drawString(50, y, f"میانگین کل: {round(student_overall_avg,2)} → {overall_status}")
+    c.drawString(50,y,f"میانگین کل: {round(student_overall_avg,2)} → {overall_status}")
     y -= 30
 
-    # نمودار خطی دانش‌آموز (درس‌ها را پشت سر هم)
+    # نمودار خطی دانش‌آموز
     df_student = scores_long[scores_long['نام دانش‌آموز']==student_name]
     plt.figure(figsize=(6,3))
     for lesson in df_student['درس'].unique():
         df_lesson = df_student[df_student['درس']==lesson]
-        plt.plot(df_lesson['هفته'], df_lesson['نمره'], marker='o', label=lesson)
+        plt.plot(df_lesson['هفته'],df_lesson['نمره'],marker='o',label=lesson)
     plt.title("روند نمرات دانش‌آموز")
     plt.xlabel("هفته")
     plt.ylabel("نمره")
     plt.legend()
     line_buffer = BytesIO()
     plt.tight_layout()
-    plt.savefig(line_buffer, format='png')
+    plt.savefig(line_buffer,format='png')
     plt.close()
     line_buffer.seek(0)
-    c.drawImage(ImageReader(line_buffer), 50, y-150, width=500, height=150)
+    c.drawImage(ImageReader(line_buffer),50,y-150,width=500,height=150)
     y -= 170
 
     # نمودار دایره‌ای وضعیت کل کلاس
     class_status = scores_long.groupby(['درس','نام دانش‌آموز'])['نمره'].mean().astype(int).map(status_map)
     status_counts = class_status.value_counts()
     plt.figure(figsize=(5,3))
-    plt.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%',
+    plt.pie(status_counts,labels=status_counts.index,autopct='%1.1f%%',
             colors=['red','orange','blue','green'])
     plt.title("وضعیت کیفی کل کلاس")
     pie_buffer = BytesIO()
-    plt.savefig(pie_buffer, format='png')
+    plt.savefig(pie_buffer,format='png')
     plt.close()
     pie_buffer.seek(0)
-    c.drawImage(ImageReader(pie_buffer), 50, y-150, width=300, height=150)
+    c.drawImage(ImageReader(pie_buffer),50,y-150,width=300,height=150)
 
     c.save()
     buffer.seek(0)
