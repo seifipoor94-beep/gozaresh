@@ -5,43 +5,88 @@ import plotly.express as px
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
-
-st.set_page_config(page_title="📊 داشبورد گزارش نمرات", layout="wide")
-st.title("📊 داشبورد پیشرفته نمرات دانش‌آموزان")
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+import os
 
 # -------------------------------
-# بارگذاری فایل‌ها
+# تنظیمات اولیه
+# -------------------------------
+st.set_page_config(page_title="📊 داشبورد گزارش نمرات", layout="wide")
+st.title("📊 داشبورد گزارش نمرات دانش‌آموز")
+
+# -------------------------------
+# بارگذاری اطلاعات کاربران
 # -------------------------------
 users_df = pd.read_excel("data/users.xlsx")
-users_df.columns = users_df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
-
-scores_file = "data/nomarat_darsi.xlsx"
-scores_xl = pd.ExcelFile(scores_file)
-lessons = scores_xl.sheet_names  # هر شیت = یک درس
+users_df.columns = users_df.columns.str.strip().str.replace('\u200c', ' ').str.replace('\xa0', ' ')
 
 # -------------------------------
-# فرم ورود (صفحه اصلی)
+# بارگذاری نمرات (همه شیت‌ها)
 # -------------------------------
-st.subheader("🔐 ورود به داشبورد")
-entered_role = st.selectbox("نقش خود را انتخاب کنید:", ["والد", "آموزگار", "مدیر"])
-entered_code = st.text_input("رمز ورود:", type="password")
-login_button = st.button("ورود")
+scores_dict = pd.read_excel("data/nomarat_darsi.xlsx", sheet_name=None)
+scores_long = []
+for lesson, df in scores_dict.items():
+    df = df.rename(columns=lambda x: str(x).strip())
+    df = df.melt(id_vars=["نام دانش آموز"], var_name="هفته", value_name="نمره")
+    df["درس"] = lesson
+    scores_long.append(df)
+scores_long = pd.concat(scores_long, ignore_index=True)
 
-if login_button:
-    valid_user = users_df[(users_df["نقش"] == entered_role) & (users_df["رمز ورود"] == entered_code)]
-    if valid_user.empty:
-        st.warning("❌ رمز یا نقش اشتباه است.")
-        st.stop()
-    user_name = valid_user.iloc[0]["نام کاربر"]
+# -------------------------------
+# وضعیت کیفی نمرات
+# -------------------------------
+status_map = {
+    1: "نیاز به تلاش بیشتر",
+    2: "قابل قبول",
+    3: "خوب",
+    4: "خیلی خوب"
+}
+status_colors = {
+    "نیاز به تلاش بیشتر": "#e74c3c",
+    "قابل قبول": "#f1c40f",
+    "خوب": "#3498db",
+    "خیلی خوب": "#2ecc71"
+}
+
+# -------------------------------
+# مدیریت وضعیت ورود با session_state
+# -------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+    st.session_state["user_name"] = ""
+    st.session_state["role"] = ""
+
+if not st.session_state["logged_in"]:
+    st.subheader("🔐 ورود به داشبورد")
+    entered_role = st.selectbox("نقش خود را انتخاب کنید:", ["والد", "آموزگار", "مدیر"])
+    entered_code = st.text_input("رمز ورود:", type="password")
+
+    if st.button("ورود"):
+        valid_user = users_df[(users_df["نقش"] == entered_role) & (users_df["رمز ورود"] == entered_code)]
+        if valid_user.empty:
+            st.warning("❌ رمز یا نقش اشتباه است.")
+        else:
+            st.session_state["logged_in"] = True
+            st.session_state["user_name"] = valid_user.iloc[0]["نام کاربر"]
+            st.session_state["role"] = entered_role
+            st.success("✅ ورود موفقیت‌آمیز بود. لطفاً دوباره روی ورود کلیک کنید.")
+else:
+    # -------------------------------
+    # صفحه اصلی داشبورد
+    # -------------------------------
+    user_name = st.session_state["user_name"]
+    entered_role = st.session_state["role"]
     st.success(f"✅ خوش آمدید {user_name} عزیز! شما به‌عنوان {entered_role} وارد شده‌اید.")
 
     # -------------------------------
     # انتخاب درس
     # -------------------------------
-    selected_lesson = st.selectbox("درس مورد نظر را انتخاب کنید:", lessons)
-    lesson_data = pd.read_excel(scores_file, sheet_name=selected_lesson)
-    lesson_data.columns = lesson_data.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
+    lessons = scores_long["درس"].unique()
+    selected_lesson = st.selectbox("📘 درس مورد نظر را انتخاب کنید:", lessons)
 
     # -------------------------------
     # انتخاب دانش‌آموز
@@ -49,71 +94,62 @@ if login_button:
     if entered_role == "والد":
         selected_student = user_name
     else:
-        students = lesson_data['نام دانش‌آموز'].unique()
-        selected_student = st.selectbox("دانش‌آموز را انتخاب کنید:", students)
-
-    student_data = lesson_data[lesson_data['نام دانش‌آموز']==selected_student]
+        students = scores_long[scores_long["درس"] == selected_lesson]["نام دانش آموز"].unique()
+        selected_student = st.selectbox("👩‍🎓 دانش‌آموز را انتخاب کنید:", students)
 
     # -------------------------------
-    # نمودار دایره‌ای وضعیت کلاس
+    # داده‌های درس انتخابی
     # -------------------------------
-    status_map = {1:'نیاز به تلاش بیشتر', 2:'قابل قبول', 3:'خوب', 4:'خیلی خوب'}
-    status_colors = {'نیاز به تلاش بیشتر':'#FF6347', 'قابل قبول':'#FFD700',
-                     'خوب':'#87CEFA', 'خیلی خوب':'#32CD32'}
-    lesson_avg_status = lesson_data.drop('نام دانش‌آموز', axis=1).mean(axis=1).map(lambda x: int(round(x)))
-    lesson_status_counts = lesson_avg_status.map(status_map).value_counts()
-
-    fig1, ax1 = plt.subplots()
-    ax1.pie([lesson_status_counts.get(s,0) for s in status_map.values()],
-            labels=status_map.values(),
-            colors=[status_colors[s] for s in status_map.values()],
-            autopct='%1.1f%%', startangle=90)
-    ax1.set_title(f"وضعیت کل کلاس در درس {selected_lesson}")
-    st.pyplot(fig1)
+    lesson_data = scores_long[scores_long["درس"] == selected_lesson]
 
     # -------------------------------
-    # نمودار خطی هفته‌ها برای دانش‌آموز
+    # نمودار دایره‌ای وضعیت کل کلاس
     # -------------------------------
-    weeks = [c for c in lesson_data.columns if c!='نام دانش‌آموز']
-    student_scores = student_data[weeks].iloc[0]
-    fig2, ax2 = plt.subplots()
-    ax2.plot(weeks, student_scores, marker='o', linestyle='-', color='orange')
-    ax2.set_title(f"نمرات {selected_student} در درس {selected_lesson}")
-    ax2.set_ylabel("نمره")
-    ax2.set_xlabel("هفته")
-    st.pyplot(fig2)
+    st.subheader(f"📊 وضعیت کیفی کلاس در درس {selected_lesson}")
+    status_counts = lesson_data["نمره"].map(status_map).value_counts()
+
+    fig_pie = px.pie(
+        names=status_counts.index,
+        values=status_counts.values,
+        title=f"وضعیت کیفی کلاس در درس {selected_lesson}",
+        color=status_counts.index,
+        color_discrete_map=status_colors
+    )
+    st.plotly_chart(fig_pie)
 
     # -------------------------------
-    # کارنامه مدرسه‌ای برای دانش‌آموز
+    # نمودار روند نمرات دانش‌آموز
     # -------------------------------
-    st.subheader(f"📝 کارنامه {selected_student}")
-    report_df = pd.DataFrame(columns=['درس','میانگین','وضعیت'])
-    for lesson in lessons:
-        df = pd.read_excel(scores_file, sheet_name=lesson)
-        df.columns = df.columns.str.strip().str.replace('\u200c',' ').str.replace('\xa0',' ')
-        student_row = df[df['نام دانش‌آموز']==selected_student]
-        if not student_row.empty:
-            avg_score = student_row.drop('نام دانش‌آموز', axis=1).mean(axis=1).values[0]
-            status = status_map[int(round(avg_score))]
-            report_df = report_df.append({'درس':lesson,'میانگین':round(avg_score,2),'وضعیت':status}, ignore_index=True)
-    st.dataframe(report_df.style.apply(lambda x: [f"background-color: {status_colors[v]}" for v in x['وضعیت']], axis=1))
+    st.subheader(f"📈 روند نمرات {selected_student} در درس {selected_lesson}")
+    student_data = lesson_data[lesson_data["نام دانش آموز"] == selected_student]
+
+    fig_line = px.line(
+        student_data,
+        x="هفته",
+        y="نمره",
+        markers=True,
+        title=f"روند نمرات {selected_student} در درس {selected_lesson}"
+    )
+    st.plotly_chart(fig_line)
 
     # -------------------------------
-    # دانلود PDF کارنامه
+    # رتبه‌بندی دانش‌آموزها در درس انتخابی (فقط برای معلم و مدیر)
     # -------------------------------
-    def generate_pdf(df, student_name):
-        buffer = BytesIO()
-        c = canvas.Canvas(buffer, pagesize=A4)
-        c.setFont("Helvetica", 12)
-        c.drawString(50, 800, f"کارنامه {student_name}")
-        y = 770
-        for index, row in df.iterrows():
-            c.drawString(50, y, f"{row['درس']}: {row['میانگین']} - {row['وضعیت']}")
-            y -= 20
-        c.showPage()
-        c.save()
-        buffer.seek(0)
-        return buffer
+    if entered_role in ["آموزگار", "مدیر"]:
+        st.subheader(f"🏆 رتبه‌بندی دانش‌آموزان در درس {selected_lesson}")
+        student_avg = lesson_data.groupby("نام دانش آموز")["نمره"].mean().reset_index()
+        student_avg["وضعیت"] = student_avg["نمره"].map(status_map)
+        ranking = student_avg.sort_values(by="نمره", ascending=False).reset_index(drop=True)
+        ranking.index = ranking.index + 1
+        st.dataframe(ranking)
 
-    pdf_buffer = generate_pdf(report_df, selected_student)
-    st.download_button(label="📥 دانلود PDF کارنامه", data=pdf_buffer, file_name=f"report_{selected_student}.pdf", mime='application/pdf')
+    # -------------------------------
+    # رتبه‌بندی کلی (میانگین همه درس‌ها)
+    # -------------------------------
+    if entered_role in ["آموزگار", "مدیر"]:
+        st.subheader("🌍 رتبه‌بندی کلی دانش‌آموزان (میانگین همه درس‌ها)")
+        overall_avg = scores_long.groupby("نام دانش آموز")["نمره"].mean().reset_index()
+        overall_avg["وضعیت"] = overall_avg["نمره"].map(status_map)
+        overall_rank = overall_avg.sort_values(by="نمره", ascending=False).reset_index(drop=True)
+        overall_rank.index = overall_rank.index + 1
+        st.dataframe(overall_rank)
