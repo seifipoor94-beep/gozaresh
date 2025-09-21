@@ -25,23 +25,28 @@ users_df.columns = users_df.columns.str.strip().str.replace('\u200c', ' ').str.r
 scores_df = pd.read_excel("data/nomarat_darsi.xlsx")
 scores_df.columns = scores_df.columns.str.strip().str.replace('\u200c', ' ').str.replace('\xa0', ' ')
 
+# -------------------------------
 # شناسایی خودکار ستون‌ها
+# -------------------------------
 column_map = {}
+
 for col in scores_df.columns:
-    if 'نام' in col and 'دانش' in col:
+    col_clean = col.strip().replace('\u200c',' ').replace('\xa0',' ')
+    if 'نام' in col_clean and 'دانش' in col_clean:
         column_map['نام دانش‌آموز'] = col
-    elif 'درس' in col:
+    elif 'درس' in col_clean:
         column_map['درس'] = col
-    elif 'نمره' in col:
+    elif 'نمره' in col_clean:
         column_map['نمره'] = col
 
-# اطمینان از پیدا شدن همه ستون‌ها
+# بررسی پیدا شدن همه ستون‌ها
 required_columns = ['نام دانش‌آموز', 'درس', 'نمره']
-for col in required_columns:
-    if col not in column_map:
-        st.error(f"❌ ستون مورد نیاز '{col}' در فایل نمرات یافت نشد!")
-        st.stop()
+missing_columns = [col for col in required_columns if col not in column_map]
+if missing_columns:
+    st.error(f"❌ ستون(های) مورد نیاز {missing_columns} در فایل نمرات یافت نشد! ستون‌های موجود: {scores_df.columns.tolist()}")
+    st.stop()
 
+# تغییر نام ستون‌ها به نام استاندارد
 scores_df.rename(columns={v:k for k,v in column_map.items()}, inplace=True)
 
 # -------------------------------
