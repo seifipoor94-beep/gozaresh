@@ -10,3 +10,4 @@ numpy
 reportlab
 arabic-reshaper
 python-bidi
+kaleido
