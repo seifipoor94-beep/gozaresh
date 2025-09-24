@@ -11,3 +11,4 @@ reportlab
 arabic-reshaper
 python-bidi
 kaleido
+fpdf2
