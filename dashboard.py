@@ -149,25 +149,31 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    if os.path.exists("fonts/Vazir.ttf"):
-        pdfmetrics.registerFont(TTFont('Vazir', 'fonts/Vazir.ttf'))
-        font_name = 'Vazir'
+    # مسیر مطلق به فونت
+    font_path = os.path.join(os.path.dirname(__file__), "fonts", "Vazir.ttf")
+    if os.path.exists(font_path):
+        pdfmetrics.registerFont(TTFont("Vazir", font_path))
+        font_name = "Vazir"
     else:
         font_name = "Helvetica"
+
+    # عنوان اصلی
     c.setFont(font_name, 18)
     c.drawCentredString(width/2, height-50, reshape(f"کارنامه دانش‌آموز {student_name}"))
 
     # جدول کارنامه
     c.setFont(font_name, 14)
     y = height-100
-    c.drawString(50,y, reshape("درس"))
-    c.drawString(250,y, reshape("میانگین"))
-    c.drawString(400,y, reshape("وضعیت"))
+    c.drawString(50, y, reshape("درس"))
+    c.drawString(250, y, reshape("میانگین"))
+    c.drawString(400, y, reshape("وضعیت"))
     y -= 20
     c.setFont(font_name, 12)
+
     for lesson in scores_long['درس'].unique():
         df_lesson = scores_long[(scores_long['درس'] == lesson) & (scores_long['نام دانش‌آموز'] == student_name)]
-        if df_lesson.empty: continue
+        if df_lesson.empty:
+            continue
         avg_score = df_lesson['نمره'].mean()
         status = status_map.get(int(round(avg_score)), "نامشخص")
         c.drawString(50, y, reshape(lesson))
@@ -177,7 +183,7 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
 
     # نمودار خطی
     df_student = scores_long[scores_long['نام دانش‌آموز'] == student_name]
-    plt.figure(figsize=(6,3))
+    plt.figure(figsize=(6, 3))
     for lesson in df_student['درس'].unique():
         df_l = df_student[df_student['درس'] == lesson]
         plt.plot(df_l['هفته'], df_l['نمره'], marker='o', label=reshape(lesson))
@@ -196,9 +202,9 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     # نمودار دایره‌ای
     class_status = df_student.groupby('درس')['نمره'].mean().round().astype(int).map(status_map)
     status_counts = class_status.value_counts()
-    plt.figure(figsize=(5,3))
+    plt.figure(figsize=(5, 3))
     plt.pie(status_counts, labels=[reshape(label) for label in status_counts.index], autopct='%1.1f%%',
-            colors=['red','orange','blue','green'])
+            colors=['red', 'orange', 'blue', 'green'])
     plt.title(reshape("وضعیت کیفی کلاس"), fontsize=12)
     pie_buf = BytesIO()
     plt.savefig(pie_buf, format='png')
@@ -206,13 +212,14 @@ def generate_pdf(student_name, scores_long, status_map, status_colors):
     pie_buf.seek(0)
     c.drawImage(ImageReader(pie_buf), 50, y-150, width=300, height=150)
 
-    # امضای پایانی
+    # امضا
     c.setFont(font_name, 12)
     c.drawCentredString(width/2, 40, reshape("طراحی‌شده با عشق توسط آموزگار: فاطمه سیفی‌پور 💖"))
 
     c.save()
     buffer.seek(0)
     return buffer
+
 
 # دکمه دانلود PDF
 pdf_buf = generate_pdf(selected_student, scores_long, status_map, status_colors)
@@ -222,3 +229,4 @@ st.download_button(
     file_name=f"کارنامه_{selected_student}.pdf",
     mime="application/pdf"
 )
+
